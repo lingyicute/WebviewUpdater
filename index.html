@@ -3,8 +3,31 @@
 <head>
   <title>泠依lyi的主页</title>
   <style>
+    @media screen and (max-width: 600px) {
+      /* 移动设备适配 */
+      .container {
+        padding: 20px;
+      }
+      .avatar {
+        width: 100px;
+        height: 100px;
+      }
+      .name {
+        font-size: 18px;
+      }
+      .tagline {
+        font-size: 12px;
+      }
+      .button {
+        width: 140px;
+        padding: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+    }
+
     body {
-      background-image: url("https://lyi.xyc.best/bg.png");
+      background-image: url("https://lyixyc.best/bg.png");
       background-size: cover;
       background-position: center;
       color: white;
@@ -17,6 +40,16 @@
       align-items: center;
       justify-content: center;
       height: 100vh;
+      animation: fade-in 1s;
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
     }
 
     .avatar {
@@ -24,6 +57,16 @@
       height: 150px;
       border-radius: 50%;
       overflow: hidden;
+      animation: rotate 4s linear infinite;
+    }
+
+    @keyframes rotate {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     .avatar img {
@@ -34,16 +77,30 @@
     .name {
       font-size: 24px;
       margin-top: 10px;
+      animation: slide-up 1s;
+    }
+
+    @keyframes slide-up {
+      from {
+        transform: translateY(50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
     }
 
     .tagline {
       margin-top: 5px;
       font-size: 14px;
       opacity: 0.8;
+      animation: fade-in 1s 0.5s;
     }
 
     .buttons {
       margin-top: 20px;
+      animation: fade-in 1s 1s;
     }
 
     .button {
@@ -62,9 +119,31 @@
       background-color: rgba(255, 255, 255, 0.8);
     }
 
+    .button:nth-child(1) {
+      animation: scale-in 1s 1.5s;
+    }
+
+    .button:nth-child(2) {
+      animation: scale-in 1s 1.7s;
+    }
+
+    .button:nth-child(3) {
+      animation: scale-in 1s 1.9s;
+    }
+
+    @keyframes scale-in {
+      from {
+        transform: scale(0);
+      }
+      to {
+        transform: scale(1);
+      }
+    }
+
     .copyright {
       margin-top: 20px;
       opacity: 0.6;
+      animation: fade-in 1s 2s;
     }
   </style>
 </head>
