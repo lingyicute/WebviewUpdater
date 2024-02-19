@@ -2,7 +2,7 @@ body, html {
   margin: 0;
   padding: 0;
   height: 100%;
-  background-image: url('https://lyi.xyc.best/bg.png');
+  background-image: url('https://lyixyc.best/bg.png');
   background-size: cover;
   background-attachment: fixed;
   font-family: 'Arial', sans-serif;
@@ -16,6 +16,7 @@ body, html {
   align-items: center;
   justify-content: center;
   text-align: center;
+  padding-bottom: 30px; /* This padding will prevent footer from overlapping */
 }
 
 .avatar {
@@ -41,6 +42,7 @@ h1 {
   display: flex;
   flex-direction: column;
   margin-top: 30px;
+  margin-bottom: 30px; /* Add bottom margin to match the distance of motto and first button */
 }
 
 .button {
@@ -65,7 +67,9 @@ footer {
   width: 100%;
   text-align: center;
   color: #888;
-  padding: 20px 0;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  position: relative;
 }
 
 footer p {
