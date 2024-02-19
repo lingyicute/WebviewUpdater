@@ -1,167 +1,25 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <title>泠依lyi的主页</title>
-  <style>
-    @media screen and (max-width: 600px) {
-      /* 移动设备适配 */
-      .container {
-        padding: 20px;
-      }
-      .avatar {
-        width: 100px;
-        height: 100px;
-      }
-      .name {
-        font-size: 18px;
-      }
-      .tagline {
-        font-size: 12px;
-      }
-      .button {
-        width: 140px;
-        padding: 8px;
-        margin-bottom: 8px;
-        font-size: 12px;
-      }
-    }
-
-    body {
-      background-image: url("https://lyixyc.best/bg.png");
-      background-size: cover;
-      background-position: center;
-      color: white;
-      font-family: Arial, sans-serif;
-    }
-
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      animation: fade-in 1s;
-    }
-
-    @keyframes fade-in {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-
-    .avatar {
-      width: 150px;
-      height: 150px;
-      border-radius: 50%;
-      overflow: hidden;
-      animation: rotate 4s linear infinite;
-    }
-
-    @keyframes rotate {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    .avatar img {
-      width: 100%;
-      height: auto;
-    }
-
-    .name {
-      font-size: 24px;
-      margin-top: 10px;
-      animation: slide-up 1s;
-    }
-
-    @keyframes slide-up {
-      from {
-        transform: translateY(50px);
-        opacity: 0;
-      }
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
-    }
-
-    .tagline {
-      margin-top: 5px;
-      font-size: 14px;
-      opacity: 0.8;
-      animation: fade-in 1s 0.5s;
-    }
-
-    .buttons {
-      margin-top: 20px;
-      animation: fade-in 1s 1s;
-    }
-
-    .button {
-      display: block;
-      width: 180px;
-      padding: 10px;
-      margin-bottom: 10px;
-      text-align: center;
-      background-color: rgba(255, 255, 255, 0.5);
-      color: #333;
-      text-decoration: none;
-      transition: background-color 0.3s ease;
-    }
-
-    .button:hover {
-      background-color: rgba(255, 255, 255, 0.8);
-    }
-
-    .button:nth-child(1) {
-      animation: scale-in 1s 1.5s;
-    }
-
-    .button:nth-child(2) {
-      animation: scale-in 1s 1.7s;
-    }
-
-    .button:nth-child(3) {
-      animation: scale-in 1s 1.9s;
-    }
-
-    @keyframes scale-in {
-      from {
-        transform: scale(0);
-      }
-      to {
-        transform: scale(1);
-      }
-    }
-
-    .copyright {
-      margin-top: 20px;
-      opacity: 0.6;
-      animation: fade-in 1s 2s;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>泠依的个人主页</title>
+<link rel="stylesheet" href="styles.css">
+<script src="script.js" defer></script>
 </head>
 <body>
-  <div class="container">
-    <div class="avatar">
-      <img src="https://sp.xyc.best/favicon.ico" alt="Avatar">
-    </div>
-    <div class="name">泠依lyi</div>
-    <div class="tagline">循此苦旅，以觅星辰</div>
-    <div class="buttons">
-      <a class="button" href="https://sp.xyc.best">星愿令</a>
-      <a class="button" href="https://blt.xyc.best">星愿便利贴</a>
-      <a class="button" href="https://time.xyc.best">小拾光</a>
-    </div>
-    <div class="copyright">
-      &copy; 2024 泠依lyi. All rights reserved.
-    </div>
-  </div>
+<div class="wrapper">
+  <img src="https://sp.xyc.best/favicon.ico" alt="泠依的头像" class="avatar">
+  <h1>泠依lyi</h1>
+  <p class="motto">循此苦旅，以觅星辰</p>
+  <nav class="nav-buttons">
+    <a href="https://sp.xyc.best" class="button">星愿令</a>
+    <a href="https://blt.xyc.best" class="button">星愿便利贴</a>
+    <a href="https://time.xyc.best" class="button">小拾光</a>
+  </nav>
+  <footer>
+    <p>© 2024 泠依lyi. All rights reserved.</p>
+  </footer>
+</div>
 </body>
 </html>
