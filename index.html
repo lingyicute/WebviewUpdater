@@ -1,26 +1,88 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>泠依的个人主页</title>
-    <link rel="stylesheet" href="styles.css">
+  <title>泠依lyi的主页</title>
+  <style>
+    body {
+      background-image: url("https://lyi.xyc.best/bg.png");
+      background-size: cover;
+      background-position: center;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .avatar {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      overflow: hidden;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: auto;
+    }
+
+    .name {
+      font-size: 24px;
+      margin-top: 10px;
+    }
+
+    .tagline {
+      margin-top: 5px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .buttons {
+      margin-top: 20px;
+    }
+
+    .button {
+      display: block;
+      width: 180px;
+      padding: 10px;
+      margin-bottom: 10px;
+      text-align: center;
+      background-color: rgba(255, 255, 255, 0.5);
+      color: #333;
+      text-decoration: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .button:hover {
+      background-color: rgba(255, 255, 255, 0.8);
+    }
+
+    .copyright {
+      margin-top: 20px;
+      opacity: 0.6;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="avatar">
-            <img src="https://sp.xyc.best/favicon.ico" alt="泠依的头像">
-        </div>
-        <h1>泠依lyi</h1>
-        <p class="quote">循此苦旅，以觅星辰</p>
-        <div class="buttons">
-            <a href="https://sp.xyc.best" class="button">星愿令</a>
-            <a href="https://blt.xyc.best" class="button">星愿便利贴</a>
-            <a href="https://time.xyc.best" class="button">小拾光</a>
-        </div>
-        <footer>
-            <p>&copy; 2023 泠依lyi. All rights reserved.</p>
-        </footer>
+  <div class="container">
+    <div class="avatar">
+      <img src="https://sp.xyc.best/favicon.ico" alt="Avatar">
     </div>
+    <div class="name">泠依lyi</div>
+    <div class="tagline">循此苦旅，以觅星辰</div>
+    <div class="buttons">
+      <a class="button" href="https://sp.xyc.best">星愿令</a>
+      <a class="button" href="https://blt.xyc.best">星愿便利贴</a>
+      <a class="button" href="https://time.xyc.best">小拾光</a>
+    </div>
+    <div class="copyright">
+      &copy; 2024 泠依lyi. All rights reserved.
+    </div>
+  </div>
 </body>
 </html>
