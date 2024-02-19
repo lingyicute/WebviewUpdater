@@ -2,11 +2,11 @@ body, html {
   margin: 0;
   padding: 0;
   height: 100%;
-  background-image: url('https://lyixyc.best/bg.png');
+  background-image: url('https://lyi.xyc.best/bg.png');
   background-size: cover;
   background-attachment: fixed;
   font-family: 'Arial', sans-serif;
-  color: #fff; /* Update text color to white */
+  color: #fff;
 }
 
 .wrapper {
@@ -22,38 +22,38 @@ body, html {
   border-radius: 50%;
   width: 150px;
   height: 150px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Add shadow to the avatar */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 h1 {
   margin: 20px 0 10px;
   font-size: 2em;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* Add text shadow */
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .motto {
   font-size: 1em;
   margin-bottom: 30px;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* Add text shadow */
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .nav-buttons {
   display: flex;
   flex-direction: column;
-  margin-top: 30px; /* Increase spacing from motto */
+  margin-top: 30px;
 }
 
 .button {
   background-color: #fff;
   color: #333;
-  padding: 15px 30px; /* Increase padding for larger buttons */
-  margin: 10px 0; /* Increase margin for more spacing */
+  padding: 15px 30px;
+  margin: 10px 0;
   text-decoration: none;
   border: none;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
-  border-radius: 20px; /* Add rounded corners */
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Add shadow to the buttons */
+  border-radius: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .button:hover {
@@ -71,6 +71,15 @@ footer {
 footer p {
   margin: 0;
   font-size: 0.8em;
+}
+
+.fade-in {
+  opacity: 0;
+  transition: opacity 1.5s ease-in-out;
+}
+
+.fade-in-visible {
+  opacity: 1;
 }
 
 /* Responsive design for tablet and mobile screens */
@@ -91,14 +100,4 @@ footer p {
   .button {
     padding: 8px 16px;
   }
-}
-
-/* Add '.fade-in' class animation */
-.fade-in {
-  opacity: 0;
-  transition: opacity 1.5s ease-in-out;
-}
-
-.fade-in-visible {
-  opacity: 1;
 }
