@@ -1,66 +1,103 @@
-/* Reset some basic elements */
-body, h1, p {
-    margin: 0;
-    padding: 0;
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-image: url('https://lyixyc.best/bg.png');
+  background-size: cover;
+  background-attachment: fixed;
+  font-family: 'Arial', sans-serif;
 }
 
-/* Basic styles */
-body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    background-color: #f4f4f4;
-    color: #333;
-    line-height: 1.6;
+.wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
-.container {
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    padding-top: 50px;
+.avatar {
+  border-radius: 50%;
+  width: 150px;
+  height: 150px;
+  animation: fadeIn 1.5s ease-in-out;
 }
 
-.avatar img {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    border: 3px solid #333;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 h1 {
-    margin-top: 20px;
+  margin: 20px 0 10px;
+  font-size: 2em;
+  animation: fadeIn 2s ease-in-out;
 }
 
-.quote {
-    font-style: italic;
-    color: #666;
-    margin-bottom: 50px;
+.motto {
+  font-size: 1em;
+  color: #666;
+  margin-bottom: 30px;
+  animation: fadeIn 2.5s ease-in-out;
 }
 
-.buttons .button {
-    display: inline-block;
-    margin: 10px;
-    padding: 10px 20px;
-    background-color: #333;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 5px;
-    transition: background-color 0.3s;
+.nav-buttons {
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 3s ease-in-out;
 }
 
-.buttons .button:hover {
-    background-color: #555;
+.button {
+  background-color: #fff;
+  color: #333;
+  padding: 10px 20px;
+  margin: 5px 0;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.button:hover {
+  background-color: #f8f8f8;
+  color: #000;
 }
 
 footer {
-    color: #777;
-    margin-top: 100px;
-    padding: 20px;
-    font-size: 0.8em;
+  width: 100%;
+  text-align: center;
+  color: #888;
+  padding: 20px 0;
 }
 
+footer p {
+  margin: 0;
+  font-size: 0.8em;
+}
+
+/* Responsive design for tablet and mobile screens */
 @media (max-width: 768px) {
-    .container {
-        padding-top: 20px;
-    }
+  .avatar {
+    width: 120px;
+    height: 120px;
+  }
+
+  h1 {
+    font-size: 1.5em;
+  }
+
+  .motto {
+    font-size: 0.9em;
+  }
+
+  .button {
+    padding: 8px 16px;
+  }
 }
