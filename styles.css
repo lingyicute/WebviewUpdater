@@ -2,10 +2,11 @@ body, html {
   margin: 0;
   padding: 0;
   height: 100%;
-  background-image: url('https://lyi.xyc.best/bg.png');
+  background-image: url('https://lyixyc.best/bg.png');
   background-size: cover;
   background-attachment: fixed;
   font-family: 'Arial', sans-serif;
+  color: #fff; /* Update text color to white */
 }
 
 .wrapper {
@@ -21,48 +22,38 @@ body, html {
   border-radius: 50%;
   width: 150px;
   height: 150px;
-  animation: fadeIn 1.5s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Add shadow to the avatar */
 }
 
 h1 {
   margin: 20px 0 10px;
   font-size: 2em;
-  animation: fadeIn 2s ease-in-out;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* Add text shadow */
 }
 
 .motto {
   font-size: 1em;
-  color: #666;
   margin-bottom: 30px;
-  animation: fadeIn 2.5s ease-in-out;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* Add text shadow */
 }
 
 .nav-buttons {
   display: flex;
   flex-direction: column;
-  animation: fadeIn 3s ease-in-out;
+  margin-top: 30px; /* Increase spacing from motto */
 }
 
 .button {
   background-color: #fff;
   color: #333;
-  padding: 10px 20px;
-  margin: 5px 0;
+  padding: 15px 30px; /* Increase padding for larger buttons */
+  margin: 10px 0; /* Increase margin for more spacing */
   text-decoration: none;
   border: none;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
-  border-radius: 5px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  border-radius: 20px; /* Add rounded corners */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Add shadow to the buttons */
 }
 
 .button:hover {
@@ -100,4 +91,14 @@ footer p {
   .button {
     padding: 8px 16px;
   }
+}
+
+/* Add '.fade-in' class animation */
+.fade-in {
+  opacity: 0;
+  transition: opacity 1.5s ease-in-out;
+}
+
+.fade-in-visible {
+  opacity: 1;
 }
