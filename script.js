@@ -1,10 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const elements = document.querySelectorAll('.avatar, h1, .motto, .button');
+  const elements = document.querySelectorAll('.fade-in');
   let delay = 0;
   elements.forEach(el => {
     setTimeout(() => {
-      el.classList.add('fade-in');
+      el.classList.add('fade-in-visible');
     }, delay);
-    delay += 500; // Increment the delay for the next element
+    delay += 500; // Increment the delay for the next element to appear
   });
 });
