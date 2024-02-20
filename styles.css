@@ -1,3 +1,12 @@
+:root {
+  --text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  --button-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  --font-color: #fff;
+  --footer-color: #888;
+  --background-color: #fff;
+  --text-color: #333;
+}
+
 body, html {
   margin: 0;
   padding: 0;
@@ -6,48 +15,49 @@ body, html {
   background-size: cover;
   background-attachment: fixed;
   font-family: 'Arial', sans-serif;
-  color: #fff;
+  color: var(--font-color);
 }
 
 .wrapper {
-  min-height: 100vh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap; /* Ensure that elements wrap on smaller screens */
   align-items: center;
-  justify-content: center;
+  justify-content: space-evenly; /* Distribute space evenly on larger screens */
+  min-height: 100vh;
   text-align: center;
-  padding-bottom: 30px; /* This padding will prevent footer from overlapping */
+  padding-bottom: 50px; /* Increased padding to ensure footer doesn't overlap */
 }
 
 .avatar {
   border-radius: 50%;
   width: 150px;
   height: 150px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--button-shadow);
 }
 
 h1 {
   margin: 20px 0 10px;
   font-size: 2em;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--text-shadow);
 }
 
 .motto {
   font-size: 1em;
   margin-bottom: 30px;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--text-shadow);
 }
 
 .nav-buttons {
   display: flex;
   flex-direction: column;
   margin-top: 30px;
-  margin-bottom: 30px; /* Add bottom margin to match the distance of motto and first button */
+  margin-bottom: 30px;
 }
 
 .button {
-  background-color: #fff;
-  color: #333;
+  background-color: var(--background-color);
+  color: var(--text-color);
   padding: 15px 30px;
   margin: 10px 0;
   text-decoration: none;
@@ -55,7 +65,7 @@ h1 {
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
   border-radius: 20px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--button-shadow);
 }
 
 .button:hover {
@@ -66,9 +76,8 @@ h1 {
 footer {
   width: 100%;
   text-align: center;
-  color: #888;
+  color: var(--footer-color);
   padding-top: 20px;
-  padding-bottom: 20px;
   position: relative;
 }
 
@@ -86,8 +95,14 @@ footer p {
   opacity: 1;
 }
 
-/* Responsive design for tablet and mobile screens */
+/* Responsive design for small screens */
 @media (max-width: 768px) {
+  .wrapper {
+    flex-direction: column; /* Stack elements on small screens */
+    justify-content: center;
+    align-items: center;
+  }
+
   .avatar {
     width: 120px;
     height: 120px;
