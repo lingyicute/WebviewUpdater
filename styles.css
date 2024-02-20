@@ -21,12 +21,21 @@ body, html {
 .wrapper {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap; /* Ensure that elements wrap on smaller screens */
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-evenly; /* Distribute space evenly on larger screens */
+  justify-content: center;
   min-height: 100vh;
-  text-align: center;
-  padding-bottom: 50px; /* Increased padding to ensure footer doesn't overlap */
+  padding-bottom: 50px;
+}
+
+.left-column, .right-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.right-column {
+  align-items: center; /* Center the buttons in the right column */
 }
 
 .avatar {
@@ -34,25 +43,25 @@ body, html {
   width: 150px;
   height: 150px;
   box-shadow: var(--button-shadow);
+  margin-bottom: 20px;
 }
 
 h1 {
-  margin: 20px 0 10px;
+  margin: 0;
   font-size: 2em;
   text-shadow: var(--text-shadow);
 }
 
 .motto {
   font-size: 1em;
-  margin-bottom: 30px;
   text-shadow: var(--text-shadow);
+  align-self: flex-start;
 }
 
 .nav-buttons {
   display: flex;
   flex-direction: column;
   margin-top: 30px;
-  margin-bottom: 30px;
 }
 
 .button {
@@ -95,11 +104,13 @@ footer p {
   opacity: 1;
 }
 
-/* Responsive design for small screens */
 @media (max-width: 768px) {
   .wrapper {
-    flex-direction: column; /* Stack elements on small screens */
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .left-column, .right-column {
     align-items: center;
   }
 
@@ -113,6 +124,7 @@ footer p {
   }
 
   .motto {
+    align-self: center;
     font-size: 0.9em;
   }
 
