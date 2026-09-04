@@ -1,15 +1,644 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebView 更新器 - Android 工程</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebView 更新小助手 by lingyicute</title>
+  <meta name="description" content="一个纯 Java、Material You 风格的 Android 系统 WebView 更新工具。开源、轻量，全自动检查和安装更新。Made with love by lingyicute." />
+  <link rel="icon" href="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/heartface.png" />
+  <style>
+    @font-face {
+      font-family: "Nebulove";
+      src: url("https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf") format("truetype");
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
+    /* ========== 全局变量 ========== */
+    :root {
+      --bg-1: #f6f0ff;
+      --bg-2: #ffffff;
+      --bg-3: #fdf0fb;
+      --text: #1f2937;
+      --muted: #64748b;
+      --accent: #6750a4;
+      --accent-soft: #ede7f6;
+      --accent-strong: #4f378b;
+      --card: rgba(255, 255, 255, 0.72);
+      --card-border: rgba(103, 80, 164, 0.12);
+      --code-bg: #f1f5f9;
+      --shadow: 0 20px 60px -20px rgba(103, 80, 164, 0.25);
+
+      /* Material You – light */
+      --m-surface: #fdf8ff;
+      --m-on-surface: #1c1b1f;
+      --m-on-surface-variant: #49454f;
+      --m-outline: #79747e;
+      --m-outline-variant: #cac4d0;
+      --m-primary: #6750a4;
+      --m-on-primary: #ffffff;
+      --m-primary-container: #eaddff;
+      --m-on-primary-container: #21005d;
+      --m-hover: rgba(0, 0, 0, 0.05);
+      --m-active: rgba(0, 0, 0, 0.1);
+    }
+
+    .phone.dark {
+      --m-surface: #141218;
+      --m-on-surface: #e6e0e9;
+      --m-on-surface-variant: #cac4d0;
+      --m-outline: #938f99;
+      --m-outline-variant: #49454f;
+      --m-primary: #d0bcff;
+      --m-on-primary: #381e72;
+      --m-primary-container: #4f378b;
+      --m-on-primary-container: #eaddff;
+      --m-hover: rgba(255, 255, 255, 0.08);
+      --m-active: rgba(255, 255, 255, 0.14);
+    }
+
+    /* ========== 基础 ========== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Nebulove", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-3) 100%);
+      background-attachment: fixed;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    code {
+      font-family: "Nebulove", ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.85em;
+    }
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    svg { display: block; }
+
+    /* ========== 顶栏 ========== */
+    .nav {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(14px);
+      background: rgba(255, 255, 255, 0.6);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav .container { height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+    .brand img { width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 0 0 1px var(--card-border); }
+    .nav-links { display: flex; gap: 6px; align-items: center; }
+    .nav-links a {
+      padding: 8px 14px; border-radius: 999px; font-size: 14px; color: var(--muted);
+      transition: background .2s, color .2s;
+    }
+    .nav-links a:hover { background: var(--accent-soft); color: var(--accent); }
+    .nav-links a.primary { background: var(--accent); color: #fff; display: inline-flex; align-items: center; gap: 6px; }
+    .nav-links a.primary:hover { background: var(--accent-strong); }
+    .nav-links a.primary svg { width: 16px; height: 16px; }
+    @media (max-width: 640px) { .nav-links a:not(.primary) { display: none; } }
+
+    /* ========== Hero ========== */
+    .hero { padding: 72px 0 40px; }
+    .hero .container {
+      display: flex; flex-direction: column; align-items: center; gap: 48px;
+    }
+    @media (min-width: 1024px) {
+      .hero .container { flex-direction: row; align-items: flex-start; justify-content: space-between; }
+    }
+    .hero-copy { max-width: 540px; }
+    @media (min-width: 1024px) { .hero-copy { padding-top: 40px; } }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft); padding: 6px 14px; border-radius: 999px;
+    }
+    .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+    .hero h1 {
+      margin-top: 20px; font-size: clamp(34px, 5vw, 52px); font-weight: 700;
+      line-height: 1.15; letter-spacing: -0.02em;
+    }
+    .hero h1 span {
+      background: linear-gradient(90deg, #6750a4, #a855f7, #ec4899);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero .lead { margin-top: 20px; font-size: 17px; color: var(--muted); line-height: 1.8; }
+    .hero-actions { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 48px; padding: 0 22px; border-radius: 999px;
+      font-size: 15px; font-weight: 600; border: 0; cursor: pointer;
+      transition: transform .15s, box-shadow .2s, background .2s;
+    }
+    .btn svg { width: 18px; height: 18px; }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 10px 25px -8px rgba(103, 80, 164, 0.6); }
+    .btn-primary:hover { background: var(--accent-strong); }
+    .btn-ghost { background: rgba(255,255,255,0.7); color: var(--accent); border: 1px solid var(--card-border); }
+    .btn-ghost:hover { background: #fff; }
+    .hero-meta { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12.5px; padding: 6px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.75); border: 1px solid var(--card-border); color: var(--muted);
+    }
+    .chip b { color: var(--text); font-weight: 600; }
+
+    /* 主题切换 */
+    .theme-toggle { margin-top: 28px; display: flex; align-items: center; gap: 12px; }
+    .theme-toggle > span { font-size: 13px; color: var(--muted); }
+    .segmented { display: inline-flex; background: #e9e4f2; padding: 4px; border-radius: 999px; }
+    .segmented button {
+      font-family: inherit; border: 0; background: transparent; cursor: pointer;
+      padding: 6px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--muted);
+      transition: background .2s, color .2s, box-shadow .2s;
+    }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active { background: #fff; color: var(--text); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+
+    /* ========== 手机预览 ========== */
+    .phone-wrap { position: relative; flex-shrink: 0; }
+    .phone-wrap::before {
+      content: ""; position: absolute; inset: 30px -30px -30px 30px; z-index: -1;
+      background: radial-gradient(closest-side, rgba(168, 85, 247, 0.25), transparent);
+      filter: blur(30px);
+    }
+    .phone {
+      position: relative; display: flex; flex-direction: column;
+      width: 360px; height: 780px; overflow: hidden;
+      border-radius: 40px; border: 10px solid #171717;
+      background: var(--m-surface); color: var(--m-on-surface);
+      box-shadow: 0 30px 70px -20px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.2);
+      transition: background .35s, color .35s;
+    }
+    @media (max-width: 400px) { .phone { width: 320px; height: 700px; } }
+    .status-bar {
+      height: 32px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; font-size: 11px; font-weight: 500;
+    }
+    .status-bar span { display: flex; align-items: center; gap: 4px; }
+    .toolbar { height: 56px; display: flex; align-items: center; padding: 0 16px; font-size: 22px; }
+    .screen { flex: 1; display: flex; flex-direction: column; padding: 8px 20px 24px; }
+    .app-head { display: flex; align-items: center; padding: 12px 0; }
+    .app-icon {
+      width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
+      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s;
+    }
+    .app-icon svg { width: 32px; height: 32px; }
+    .app-head-text { margin-left: 16px; }
+    .app-head-text .t { font-size: 24px; line-height: 32px; }
+    .app-head-text .s { margin-top: 2px; font-size: 14px; color: var(--m-on-surface-variant); }
+    .m-card {
+      margin-top: 8px; padding: 20px; border-radius: 24px;
+      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s;
+    }
+    .m-card .label { font-size: 14px; font-weight: 500; }
+    .m-card .title { margin-top: 6px; font-size: 24px; line-height: 32px; }
+    .m-card .pkg { margin-top: 4px; font-size: 12px; opacity: .9; letter-spacing: .01em; }
+    .m-card .ver { margin-top: 8px; font-size: 14px; }
+    .m-status { margin-top: 20px; text-align: center; font-size: 14px; color: var(--m-on-surface-variant); min-height: 22px; }
+    .m-btn {
+      margin-top: 16px; height: 56px; width: 100%; border-radius: 999px; border: 0; cursor: pointer;
+      font-family: inherit; font-size: 14px; font-weight: 500;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--m-primary); color: var(--m-on-primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: filter .2s, transform .1s, background .35s;
+    }
+    .m-btn:hover { filter: brightness(1.1); }
+    .m-btn:active { transform: scale(0.99); }
+    .m-btn svg { width: 18px; height: 18px; }
+    .m-btn.spinning svg { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spacer { flex: 1; min-height: 32px; }
+
+    /* 署名区块 */
+    .credit { display: flex; flex-direction: column; align-items: flex-start; }
+    .credit .powered { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--m-outline); }
+    .credit .who { margin-top: 6px; display: flex; align-items: center; }
+    .credit .who img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--m-outline-variant); }
+    .credit .who span { margin-left: 10px; font-size: 16px; font-weight: 500; color: var(--m-on-surface); }
+    .credit .links { margin-top: 2px; margin-left: -8px; display: flex; align-items: center; gap: 4px; }
+    .credit .links a {
+      height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px 0 12px;
+      border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--m-primary);
+      transition: background .2s;
+    }
+    .credit .links a:hover { background: var(--m-hover); }
+    .credit .links a:active { background: var(--m-active); }
+    .credit .links svg { width: 18px; height: 18px; }
+
+    /* ========== 通用 Section ========== */
+    section { padding: 64px 0; }
+    .section-head { max-width: 640px; margin-bottom: 36px; }
+    .section-head .eyebrow { font-size: 11px; }
+    .section-head h2 { margin-top: 14px; font-size: clamp(26px, 3.4vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+    .section-head p { margin-top: 10px; color: var(--muted); font-size: 15.5px; }
+
+    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card {
+      background: var(--card); border: 1px solid var(--card-border); border-radius: 22px; padding: 24px;
+      backdrop-filter: blur(8px); box-shadow: var(--shadow);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 28px 60px -22px rgba(103, 80, 164, 0.35); }
+    .card .ic {
+      width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+      background: var(--accent-soft); color: var(--accent); margin-bottom: 16px;
+    }
+    .card .ic svg { width: 22px; height: 22px; }
+    .card h3 { font-size: 17px; font-weight: 600; }
+    .card p { margin-top: 8px; font-size: 14px; color: var(--muted); line-height: 1.7; }
+
+    /* 工作原理步骤 */
+    .steps { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); counter-reset: step; }
+    .step {
+      position: relative; padding: 22px 22px 22px 22px; border-radius: 20px;
+      background: var(--card); border: 1px solid var(--card-border);
+    }
+    .step::before {
+      counter-increment: step; content: counter(step, decimal-leading-zero);
+      display: block; font-size: 13px; font-weight: 700; letter-spacing: .1em; color: var(--accent); margin-bottom: 10px;
+    }
+    .step h4 { font-size: 15.5px; font-weight: 600; }
+    .step p { margin-top: 6px; font-size: 13.5px; color: var(--muted); line-height: 1.7; }
+
+    /* 构建 */
+    .build-grid { display: grid; gap: 20px; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .build-grid { grid-template-columns: 1.1fr 0.9fr; } }
+    .terminal {
+      background: #1e1b2e; color: #e6e0f0; border-radius: 18px; padding: 18px 20px;
+      font-family: "Nebulove", ui-monospace, Menlo, monospace; font-size: 13.5px; line-height: 1.8;
+      box-shadow: 0 25px 50px -20px rgba(30, 27, 46, 0.6); overflow-x: auto;
+    }
+    .terminal .dots { display: flex; gap: 6px; margin-bottom: 12px; }
+    .terminal .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+    .terminal .c { color: #8b85a0; }
+    .terminal .p { color: #d0bcff; }
+    .info-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .info-list li {
+      display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px;
+      padding: 14px 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--card-border);
+    }
+    .info-list li svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent); margin-top: 3px; }
+    .info-list li span { color: var(--muted); }
+    .info-list li b { color: var(--text); font-weight: 600; }
+    .note {
+      margin-top: 16px; padding: 14px 16px; border-radius: 14px; font-size: 13.5px; color: #6b5a12;
+      background: #fff8dc; border: 1px solid #f3e4a1;
+    }
+
+    /* 作者 */
+    .author {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 22px;
+      padding: 28px; border-radius: 26px; background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--shadow);
+    }
+    .author img { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 4px #fff, 0 0 0 5px var(--card-border); }
+    .author .info { flex: 1; min-width: 220px; }
+    .author .info .powered { font-size: 11px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+    .author .info h3 { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .author .info p { color: var(--muted); font-size: 14.5px; margin-top: 6px; }
+    .author .links { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* 页脚 */
+    footer { padding: 32px 0 48px; text-align: center; color: var(--muted); font-size: 13px; }
+    footer a { color: var(--accent); }
+    footer a:hover { text-decoration: underline; }
+
+    /* 入场动画 */
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .m-btn.spinning svg { animation: none; }
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-700 flex items-center justify-center p-6">
-  <div class="max-w-md text-center">
-    <h1 class="text-2xl font-semibold mb-2">WebView 更新器（Android）</h1>
-    <p class="text-sm">这是占位页面。Android 工程源代码位于仓库根目录（app/、.github/workflows/ 等）。</p>
-  </div>
+<body>
+
+  <!-- SVG 图标定义 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.93 6h-2.95a15.65 15.65 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8ZM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96ZM4.26 14a8.2 8.2 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26Zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.99 7.99 0 0 1 5.08 16Zm2.95-8H5.08a7.99 7.99 0 0 1 4.33-3.56A15.65 15.65 0 0 0 8.03 8ZM12 19.96A14 14 0 0 1 10.09 16h3.82A14 14 0 0 1 12 19.96ZM14.34 14H9.66a14.7 14.7 0 0 1 0-4h4.68a14.7 14.7 0 0 1 0 4Zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56ZM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.2 8.2 0 0 1 0 4h-3.38Z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24"><path fill="currentColor" d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><path fill="currentColor" d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9a8.994 8.994 0 0 0 7.03-14.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><path fill="currentColor" d="M17 1.01 7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+  </svg>
+
+  <!-- 顶栏 -->
+  <header class="nav">
+    <div class="container">
+      <a class="brand" href="#top">
+        <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute" />
+        WebviewUpdater
+      </a>
+      <nav class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#how">原理</a>
+        <a href="#build">构建</a>
+        <a href="#author">作者</a>
+        <a class="primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">
+          <svg><use href="#i-github"/></svg> GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-copy reveal">
+          <span class="eyebrow">Made with ❤️ by lingyicute</span>
+          <h1>WebView 更新小助手<br /><span>一键让系统 WebView 保持最新</span></h1>
+          <p class="lead">
+            一个纯 Java 编写、采用 Material You 设计语言的 Android 系统 WebView 更新工具。
+            自动识别当前 WebView 提供者，按 Android 版本匹配最新可用版本，下载、安装一气呵成。
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater/releases" target="_blank" rel="noreferrer">
+              <svg><use href="#i-download"/></svg> 下载 APK
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">
+              <svg><use href="#i-github"/></svg> 查看源码
+            </a>
+          </div>
+          <div class="hero-meta">
+            <span class="chip"><b>minSdk 26</b> · Android 8.0+</span>
+            <span class="chip"><b>纯 Java</b> · 零第三方网络库</span>
+            <span class="chip"><b>Material 3</b> · 动态取色</span>
+            <span class="chip"><b>GPL 3.0</b> 开源</span>
+          </div>
+          <div class="theme-toggle">
+            <span>预览主题</span>
+            <div class="segmented" role="group" aria-label="切换预览主题">
+              <button type="button" data-mode="light" class="active">浅色</button>
+              <button type="button" data-mode="dark">深色</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 手机 1:1 预览 -->
+        <div class="phone-wrap reveal">
+          <div class="phone" id="phone">
+            <div class="status-bar">
+              <span id="clock">12:30</span>
+              <span><span>▲</span><span>▮▮▮</span><span>100% 〇</span></span>
+            </div>
+            <div class="toolbar">WebView 更新小助手</div>
+            <div class="screen">
+              <div class="app-head">
+                <div class="app-icon"><svg><use href="#i-globe"/></svg></div>
+                <div class="app-head-text">
+                  <div class="t">系统 WebView</div>
+                  <div class="s">Android 14 · API 34</div>
+                </div>
+              </div>
+
+              <div class="m-card">
+                <div class="label">当前 WebView</div>
+                <div class="title">Android System WebView</div>
+                <div class="pkg">com.google.android.webview</div>
+                <div class="ver">版本 124.0.6367.54（versionCode 636705433）</div>
+              </div>
+
+              <p class="m-status" id="m-status">点击下方按钮检查 WebView 更新</p>
+
+              <button class="m-btn" id="m-check" type="button">
+                <svg><use href="#i-refresh"/></svg> <span>检查更新</span>
+              </button>
+
+              <div class="spacer"></div>
+
+              <div class="credit">
+                <span class="powered">Powered By</span>
+                <div class="who">
+                  <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute 头像" />
+                  <span>lingyicute</span>
+                </div>
+                <div class="links">
+                  <a href="https://92li.uk" target="_blank" rel="noreferrer"><svg><use href="#i-home"/></svg>主页</a>
+                  <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer"><svg><use href="#i-github"/></svg>GitHub</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 功能 -->
+    <section id="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Features</span>
+          <h2>小而完整的更新体验</h2>
+          <p>没有多余的功能，只专注做好一件事：把系统 WebView 更新到最新版本。</p>
+        </div>
+        <div class="grid">
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-search"/></svg></div>
+            <h3>识别当前 WebView</h3>
+            <p>通过 <code>WebView.getCurrentWebViewPackage()</code> 读取当前系统 WebView 提供者的包名、版本名与 versionCode。</p>
+          </div>
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-refresh"/></svg></div>
+            <h3>按系统版本精准匹配</h3>
+            <p>梨在自己的 CDN 上托管了每一个 Webview 版本的安装包，App 会依据 Android 版本号帮用户匹配合适的 Webview。</p>
+          </div>
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-speed"/></svg></div>
+            <h3>实时下载进度</h3>
+            <p>下载过程中实时显示已下载 / 总大小 / 百分比与下载速度，进度一目了然。</p>
+          </div>
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-timer"/></svg></div>
+            <h3>网络超时智能提示</h3>
+            <p>连接超过 10 秒仍未建立时自动取消下载，并弹窗提示「请连接 VPN 后再试」，不让用户干等。</p>
+          </div>
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-install"/></svg></div>
+            <h3>一键唤起安装器</h3>
+            <p>下载完成后通过 FileProvider 调起系统安装器，并自动引导开启「安装未知应用」权限。</p>
+          </div>
+          <div class="card reveal">
+            <div class="ic"><svg><use href="#i-palette"/></svg></div>
+            <h3>Material You 设计</h3>
+            <p>Material 3 组件 + 动态取色，跟随系统壁纸变化；附带自适应矢量图标（含 Android 13+ 单色主题图标）。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 工作原理 -->
+    <section id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">How it works</span>
+          <h2>四步完成更新</h2>
+          <p>整个流程简单透明，无需 Root，无需额外权限。</p>
+        </div>
+        <div class="steps">
+          <div class="step reveal">
+            <h4>读取本机信息</h4>
+            <p>获取当前 WebView 包与 versionCode，并从 <code>Build.VERSION.RELEASE</code> 取得 Android 主版本（如 <code>8.1.0 → 8</code>）。</p>
+          </div>
+          <div class="step reveal">
+            <h4>请求版本接口</h4>
+            <p>访问 <code>https://webview-ver.92li.uk/&lt;版本&gt;</code>，获得该系统版本对应的最新 versionCode 与 APK 地址。</p>
+          </div>
+          <div class="step reveal">
+            <h4>比对并下载</h4>
+            <p>若服务器版本更新，确认后开始下载，全程显示进度与速度；连接超时自动中止并提示。</p>
+          </div>
+          <div class="step reveal">
+            <h4>安装更新</h4>
+            <p>通过 FileProvider 唤起系统安装器，完成 WebView 升级，浏览体验即刻焕新。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 构建 -->
+    <section id="build">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Build</span>
+          <h2>自行构建</h2>
+          <p>工程结构清晰，本地与 CI 均可一键产出 APK。</p>
+        </div>
+        <div class="build-grid">
+          <div class="terminal reveal">
+            <div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+            <div><span class="c"># 要求：JDK 17、Android SDK 34</span></div>
+            <div><span class="p">$</span> git clone https://github.com/lingyicute/WebviewUpdater.git</div>
+            <div><span class="p">$</span> cd WebviewUpdater</div>
+            <div><span class="c"># 工程未附带 wrapper，可先生成</span></div>
+            <div><span class="p">$</span> gradle wrapper --gradle-version 8.7</div>
+            <div><span class="p">$</span> ./gradlew assembleRelease</div>
+            <div>&nbsp;</div>
+            <div><span class="c"># 产物：app/build/outputs/apk/release/</span></div>
+          </div>
+          <div class="reveal">
+            <ul class="info-list">
+              <li><svg><use href="#i-check"/></svg><span><b>可使用现有工作流</b> — fork 本仓库，推送到 <code>main</code> 或手动触发即可产出 <code>apk</code> 构件。</span></li>
+              <li><svg><use href="#i-check"/></svg><span><b>自动发布 Release</b> — 工作流会自动创建带有 <code>nightly</code> 标记的 GitHub Release。</span></li>
+            </ul>
+            <div class="note">
+              ⚠️ Release 构建默认使用 debug 密钥签名，便于直接安装测试。正式分发请在 <code>app/build.gradle</code> 中配置自己的 signingConfig。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="author">
+      <div class="container">
+        <div class="author reveal">
+          <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute" />
+          <div class="info">
+            <div class="powered">Powered By</div>
+            <h3>lingyicute</h3>
+            <p>左手奶茶右手鼠标的开源姐 😋</p>
+          </div>
+          <div class="links">
+            <a class="btn btn-ghost" href="https://92li.uk" target="_blank" rel="noreferrer"><svg><use href="#i-home"/></svg> 92li.uk</a>
+            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer"><svg><use href="#i-github"/></svg> lingyicute/WebviewUpdater</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      © <span id="year"></span> <a href="https://92li.uk" target="_blank" rel="noreferrer">lingyicute</a> · WebviewUpdater ·
+      <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* ---- 主题切换（浅 / 深） ---- */
+      var phone = document.getElementById('phone');
+      var segButtons = document.querySelectorAll('.segmented button');
+      function setMode(mode) {
+        phone.classList.toggle('dark', mode === 'dark');
+        for (var i = 0; i < segButtons.length; i++) {
+          segButtons[i].classList.toggle('active', segButtons[i].getAttribute('data-mode') === mode);
+        }
+        try { localStorage.setItem('wvu-preview-mode', mode); } catch (e) {}
+      }
+      for (var i = 0; i < segButtons.length; i++) {
+        segButtons[i].addEventListener('click', function () {
+          setMode(this.getAttribute('data-mode'));
+        });
+      }
+      var saved = null;
+      try { saved = localStorage.getItem('wvu-preview-mode'); } catch (e) {}
+      if (saved === 'dark' || saved === 'light') {
+        setMode(saved);
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setMode('dark');
+      }
+
+      /* ---- 状态栏时钟 ---- */
+      var clock = document.getElementById('clock');
+      function tick() {
+        var d = new Date();
+        var h = String(d.getHours()).padStart(2, '0');
+        var m = String(d.getMinutes()).padStart(2, '0');
+        clock.textContent = h + ':' + m;
+      }
+      tick();
+      setInterval(tick, 15000);
+
+      /* ---- 「检查更新」按钮模拟 ---- */
+      var checkBtn = document.getElementById('m-check');
+      var status = document.getElementById('m-status');
+      var checking = false;
+      checkBtn.addEventListener('click', function () {
+        if (checking) return;
+        checking = true;
+        checkBtn.classList.add('spinning');
+        checkBtn.querySelector('span').textContent = '检查中…';
+        status.textContent = '正在连接 webview-ver.92li.uk …';
+        setTimeout(function () {
+          status.textContent = '当前已是最新版本 ✓';
+          checkBtn.classList.remove('spinning');
+          checkBtn.querySelector('span').textContent = '检查更新';
+          checking = false;
+        }, 1600);
+      });
+
+      /* ---- 入场动画 ---- */
+      var reveals = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) {
+            if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+          });
+        }, { threshold: 0.12 });
+        reveals.forEach(function (el) { io.observe(el); });
+      } else {
+        reveals.forEach(function (el) { el.classList.add('in'); });
+      }
+
+      /* ---- 页脚年份 ---- */
+      document.getElementById('year').textContent = new Date().getFullYear();
+    })();
+  </script>
 </body>
 </html>
