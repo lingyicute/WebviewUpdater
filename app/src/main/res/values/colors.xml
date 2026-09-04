@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material You 不可用（Android 12 以下）时的回退种子色板 -->
+    <color name="md_primary">#0B57D0</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#D3E3FD</color>
+    <color name="md_on_primary_container">#041E49</color>
+    <color name="md_secondary">#565E71</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#DAE2F9</color>
+    <color name="md_on_secondary_container">#131C2B</color>
+    <color name="md_tertiary_container">#FBD7FC</color>
+    <color name="md_on_tertiary_container">#28132E</color>
+
+    <color name="md_primary_dark">#A8C7FA</color>
+    <color name="md_on_primary_dark">#062E6F</color>
+    <color name="md_primary_container_dark">#0842A0</color>
+    <color name="md_on_primary_container_dark">#D3E3FD</color>
+    <color name="md_secondary_container_dark">#3E4759</color>
+    <color name="md_on_secondary_container_dark">#DAE2F9</color>
+
+    <color name="ic_launcher_background">#0B57D0</color>
+</resources>
