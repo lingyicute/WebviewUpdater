@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 独立的圆角矩形完整图标（应用内展示 / 商店图标） -->
+    <path android:pathData="M26,0 h56 a26,26 0 0 1 26,26 v56 a26,26 0 0 1 -26,26 h-56 a26,26 0 0 1 -26,-26 v-56 a26,26 0 0 1 26,-26 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108"
+                android:startColor="#1B6EF3"
+                android:endColor="#0842A0" />
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,26 h28 a14,14 0 0 1 14,14 v28 a14,14 0 0 1 -14,14 h-28 a14,14 0 0 1 -14,-14 v-28 a14,14 0 0 1 14,-14 z" />
+    <path
+        android:fillColor="#D3E3FD"
+        android:pathData="M26,40 a14,14 0 0 1 14,-14 h28 a14,14 0 0 1 14,14 v1 h-56 z" />
+    <path android:fillColor="#0B57D0" android:pathData="M33,34 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0" />
+    <path android:fillColor="#5B8DEF" android:pathData="M39,34 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0" />
+    <group
+        android:scaleX="1.4"
+        android:scaleY="1.4"
+        android:translateX="37.2"
+        android:translateY="44">
+        <path
+            android:fillColor="#0B57D0"
+            android:pathData="M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z" />
+    </group>
+</vector>

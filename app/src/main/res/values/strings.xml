@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WebView 更新器</string>
+    <string name="hero_title">系统 WebView</string>
+    <string name="device_info">Android %1$s · API %2$d</string>
+
+    <string name="current_webview">当前 WebView</string>
+    <string name="webview_not_found">未检测到系统 WebView</string>
+    <string name="version_format">版本 %1$s（versionCode %2$d）</string>
+
+    <string name="latest_version">服务器最新版本</string>
+    <string name="latest_code_format">versionCode %1$d</string>
+    <string name="latest_is_newer">发现新版本，可以下载并安装</string>
+    <string name="latest_is_same">当前已是最新版本</string>
+    <string name="latest_is_newer_local">本机版本比服务器更新</string>
+
+    <string name="downloading">正在下载</string>
+    <string name="progress_unknown">已下载 %1$s</string>
+    <string name="progress_format">%1$s / %2$s（%3$d%%）</string>
+    <string name="speed_format">%1$s/s</string>
+    <string name="connecting">正在连接服务器…</string>
+
+    <string name="btn_check">检查更新</string>
+    <string name="btn_download">下载并安装</string>
+    <string name="btn_install">安装已下载的 APK</string>
+    <string name="btn_cancel">取消</string>
+    <string name="ok">好的</string>
+    <string name="later">稍后</string>
+    <string name="go_settings">去设置</string>
+
+    <string name="status_idle">点击下方按钮检查 WebView 更新</string>
+    <string name="status_checking">正在检查更新…</string>
+    <string name="status_up_to_date">已是最新版本，无需更新</string>
+    <string name="status_update_available">发现新版本 versionCode %1$d</string>
+    <string name="status_downloading">正在下载新版本…</string>
+    <string name="status_download_done">下载完成，正在唤起安装程序</string>
+    <string name="status_cancelled">下载已取消</string>
+    <string name="status_error">出错了：%1$s</string>
+
+    <string name="dialog_update_title">发现新版本</string>
+    <string name="dialog_update_message">服务器最新 versionCode：%1$d\n当前 versionCode：%2$d\n\n是否下载并安装新版本？</string>
+
+    <string name="dialog_timeout_title">连接超时</string>
+    <string name="dialog_timeout_message">10 秒内未能与服务器建立连接，下载已取消。\n\n请连接 VPN 后再试。</string>
+
+    <string name="dialog_install_perm_title">需要安装权限</string>
+    <string name="dialog_install_perm_message">安装 APK 需要允许本应用「安装未知应用」。请在设置中开启后返回。</string>
+
+    <string name="dialog_error_title">发生错误</string>
+    <string name="error_bad_response">服务器响应格式不正确：%1$s</string>
+    <string name="error_http">服务器返回 HTTP %1$d</string>
+</resources>
