@@ -104,6 +104,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         b.btnCancel.setOnClickListener(v -> cancelDownload());
+        b.btnHome.setOnClickListener(v -> openUrl(getString(R.string.url_home)));
+        b.btnGithub.setOnClickListener(v -> openUrl(getString(R.string.url_github)));
     }
 
     @Override
@@ -477,6 +479,19 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         } catch (Exception e) {
             showError(e);
+        }
+    }
+
+    // ------------------------------------------------------------------ 署名区：外链
+
+    /** 用系统浏览器打开链接；没有可处理的应用时给出提示 */
+    private void openUrl(@NonNull String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(intent);
+        } catch (Exception e) {
+            Snackbar.make(b.getRoot(), R.string.no_browser, Snackbar.LENGTH_SHORT).show();
         }
     }
 

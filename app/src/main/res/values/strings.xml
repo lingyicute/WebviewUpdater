@@ -49,4 +49,12 @@
     <string name="dialog_error_title">发生错误</string>
     <string name="error_bad_response">服务器响应格式不正确：%1$s</string>
     <string name="error_http">服务器返回 HTTP %1$d</string>
+
+    <string name="powered_by">Powered By</string>
+    <string name="author_name" translatable="false">lingyicute</string>
+    <string name="btn_home">主页</string>
+    <string name="btn_github" translatable="false">GitHub</string>
+    <string name="url_home" translatable="false">https://92li.uk</string>
+    <string name="url_github" translatable="false">https://github.com/lingyicute/WebviewUpdater</string>
+    <string name="no_browser">未找到可以打开链接的应用</string>
 </resources>
