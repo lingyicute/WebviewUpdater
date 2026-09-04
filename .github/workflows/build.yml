@@ -35,8 +35,12 @@ jobs:
       - name: Build release APK (signed with debug key)
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Publish GitHub Release (on tag)
-        uses: softprops/action-gh-release@v2
-        with:
-          files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+      - name: Create Release and Upload Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "nightly-${{ github.run_number }}"  app/build/outputs/apk/release/*.apk \
+            --title "Nightly No.${{ github.run_number }}" \
+            --notes-file - << 'EOF'
+          自动构建 No.${{ github.run_number }}
+          EOF
