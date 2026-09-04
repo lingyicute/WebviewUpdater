@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WebView 更新器</string>
+    <string name="app_name">WebView 更新小助手</string>
     <string name="hero_title">系统 WebView</string>
     <string name="device_info">Android %1$s · API %2$d</string>
 
