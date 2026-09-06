@@ -37,6 +37,7 @@
 - 本地：`gradle assembleRelease`（工程未附带 wrapper，可先执行 `gradle wrapper --gradle-version 8.7`）
 - CI：推送到 `main`/`master` 或手动触发即可产出 `WebViewUpdater-apk` 构件并自动创建 GitHub Release
 
+> [!tip]
 > Release 构建默认使用 debug 密钥签名，便于直接安装测试。请在 `app/build.gradle` 中配置自己的 signingConfig。
 
 ## 说明
