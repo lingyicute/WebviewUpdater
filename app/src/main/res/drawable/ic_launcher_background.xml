@@ -1,24 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108"
-                android:startColor="#1B6EF3"
-                android:endColor="#0842A0" />
-        </aapt:attr>
-    </path>
-    <!-- 柔和的装饰圆弧 -->
+    <!-- 纯色底板:浅色 Material error-container #F9DEDC(与 92li.uk 网站 tile 一致) -->
     <path
-        android:fillColor="#1AFFFFFF"
-        android:pathData="M108,0 v54 a54,54 0 0 1 -54,-54 z" />
+        android:fillColor="#F9DEDC"
+        android:pathData="M0,0h108v108h-108z" />
 </vector>
