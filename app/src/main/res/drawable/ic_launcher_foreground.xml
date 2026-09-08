@@ -4,24 +4,35 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 白色圆角矩形（位于 66dp 安全区内） -->
+    <!-- 手机 + 下载箭头(提取自 92li.uk 的 i-webview-update 图标,已换算到 108dp 画布)
+         原图标:viewBox 0 0 24 24, translate(32,32) scale(44/24), stroke-width 2(=>3.67),圆头圆角
+         图形整体位于 66dp 自适应图标安全区内 -->
+    <!-- 手机外框 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M43,31 h22 a12,12 0 0 1 12,12 v22 a12,12 0 0 1 -12,12 h-22 a12,12 0 0 1 -12,-12 v-22 a12,12 0 0 1 12,-12 z" />
-    <!-- 顶部“浏览器标题栏”细条 -->
+        android:strokeColor="#410E0B"
+        android:strokeWidth="3.67"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44.83,35.67 H63.17 A3.67,3.67 0 0 1 66.83,39.33 V68.67 A3.67,3.67 0 0 1 63.17,72.33 H44.83 A3.67,3.67 0 0 1 41.17,68.67 V39.33 A3.67,3.67 0 0 1 44.83,35.67 Z" />
+    <!-- 下载竖线 -->
     <path
-        android:fillColor="#D3E3FD"
-        android:pathData="M31,43 a12,12 0 0 1 12,-12 h22 a12,12 0 0 1 12,12 v1 h-46 z" />
-    <path android:fillColor="#0B57D0" android:pathData="M37,38 m-1.6,0 a1.6,1.6 0 1 0 3.2,0 a1.6,1.6 0 1 0 -3.2,0" />
-    <path android:fillColor="#5B8DEF" android:pathData="M42,38 m-1.6,0 a1.6,1.6 0 1 0 3.2,0 a1.6,1.6 0 1 0 -3.2,0" />
-    <!-- 更新箭头（Material refresh 图标，缩放 1.1，居中偏下） -->
-    <group
-        android:scaleX="1.1"
-        android:scaleY="1.1"
-        android:translateX="40.8"
-        android:translateY="46">
-        <path
-            android:fillColor="#0B57D0"
-            android:pathData="M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z" />
-    </group>
+        android:strokeColor="#410E0B"
+        android:strokeWidth="3.67"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M54,44.83 V55.83" />
+    <!-- 下载箭头 -->
+    <path
+        android:strokeColor="#410E0B"
+        android:strokeWidth="3.67"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M49.42,51.25 L54,55.83 L58.58,51.25" />
+    <!-- 底部小圆点(零长线段 + 圆头) -->
+    <path
+        android:strokeColor="#410E0B"
+        android:strokeWidth="3.67"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M54,63.17 h0.01" />
 </vector>
