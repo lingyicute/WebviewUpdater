@@ -51,7 +51,7 @@ import javax.net.ssl.SSLException;
 public class MainActivity extends AppCompatActivity {
 
     private static final String BASE_URL = "https://webview-ver.92li.uk/";
-    /** 连接建立的最长等待时间：超过则取消下载并提示使用 VPN */
+    /** 连接建立的最长等待时间：超过则取消操作并提示切换网络（仍不行再建议 VPN） */
     private static final int CONNECT_TIMEOUT_MS = 10_000;
     private static final int READ_TIMEOUT_MS = 30_000;
     private static final int MAX_REDIRECTS = 5;
@@ -173,6 +173,12 @@ public class MainActivity extends AppCompatActivity {
         setBusy(true);
         b.tvStatus.setText(R.string.status_checking);
         b.btnDownload.setVisibility(View.GONE);
+        // 清掉上一次检查的结果：否则这次检查失败（超时 / 格式错误）后，
+        // 「服务器最新版本」卡片仍停在上一次的 versionCode 和「发现新版本」提示上，
+        // 残留的 latestApkUrl 也会让「下载并安装」指向已经过期的地址。
+        b.cardLatest.setVisibility(View.GONE);
+        latestVersionCode = -1;
+        latestApkUrl = null;
         downloadedApk = null;
 
         executor.execute(() -> {
@@ -204,8 +210,9 @@ public class MainActivity extends AppCompatActivity {
                     throw new IOException(getString(R.string.error_bad_response, abbreviate(body)));
                 }
                 final String apkUrl = parts[1].trim();
-                if (!apkUrl.startsWith("http")) {
-                    throw new IOException(getString(R.string.error_bad_response, abbreviate(body)));
+                // 92li.uk 已 HSTS preload：下载地址必须是 https，明文（或畸形 scheme）直接拒绝
+                if (!isHttpsUrl(apkUrl)) {
+                    throw new IOException(getString(R.string.error_not_https, abbreviate(apkUrl)));
                 }
 
                 ui.post(() -> {
@@ -218,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
                     setBusy(false);
                     if (isConnectFailure(err)) {
                         b.tvStatus.setText(getString(R.string.status_error, describe(err)));
-                        showVpnDialog();
+                        showNetworkHelpDialog();
                     } else {
                         showError(err);
                     }
@@ -284,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
         b.tvStatus.setText(R.string.status_downloading);
         b.btnDownload.setVisibility(View.GONE);
 
-        // 10 秒连接看门狗：连接尚未建立则取消并提示使用 VPN
+        // 10 秒连接看门狗：连接尚未建立则取消并提示切换网络
         final Runnable watchdog = () -> {
             if (!connected && !cancelled.get()) {
                 connectTimedOut.set(true);
@@ -292,7 +299,7 @@ public class MainActivity extends AppCompatActivity {
                 hideProgressCard();
                 setBusy(false);
                 b.tvStatus.setText(R.string.status_cancelled);
-                showVpnDialog();
+                showNetworkHelpDialog();
             }
         };
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
@@ -367,7 +374,7 @@ public class MainActivity extends AppCompatActivity {
                     } else if (!wasConnected && isConnectFailure(err)) {
                         b.tvStatus.setText(R.string.status_cancelled);
                         b.btnDownload.setVisibility(View.VISIBLE);
-                        showVpnDialog();
+                        showNetworkHelpDialog();
                     } else {
                         b.btnDownload.setVisibility(View.VISIBLE);
                         showError(err);
@@ -380,9 +387,15 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** 手动处理重定向（含跨协议），并在首次连接建立后标记 connected */
+    /**
+     * 手动处理重定向，并在首次连接建立后标记 connected。
+     * 只允许 https：即使平台已禁止明文，这里也显式拒绝 30x 到明文地址，避免降级。
+     */
     private HttpURLConnection openWithRedirects(String urlStr) throws IOException {
         String current = urlStr;
+        if (!isHttpsUrl(current)) {
+            throw new IOException(getString(R.string.error_not_https, abbreviate(current)));
+        }
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
             if (cancelled.get()) throw new InterruptedIOException("cancelled");
             HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
@@ -400,7 +413,11 @@ public class MainActivity extends AppCompatActivity {
                 String location = conn.getHeaderField("Location");
                 conn.disconnect();
                 if (location == null) throw new IOException("重定向缺少 Location");
-                current = new URL(new URL(current), location).toString();
+                String next = new URL(new URL(current), location).toString();
+                if (!isHttpsUrl(next)) {
+                    throw new IOException(getString(R.string.error_not_https, abbreviate(next)));
+                }
+                current = next;
                 continue;
             }
             if (code != HttpURLConnection.HTTP_OK) {
@@ -497,11 +514,12 @@ public class MainActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ dialogs / ui helpers
 
-    private void showVpnDialog() {
+    /** 连不上服务器时的引导 */
+    private void showNetworkHelpDialog() {
         if (isFinishing() || isDestroyed()) return;
         new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.dialog_timeout_title)
-                .setMessage(R.string.dialog_timeout_message)
+                .setTitle(R.string.dialog_network_title)
+                .setMessage(R.string.dialog_network_message)
                 .setPositiveButton(R.string.ok, null)
                 .show();
     }
@@ -521,6 +539,11 @@ public class MainActivity extends AppCompatActivity {
         busy = value;
         b.btnCheck.setEnabled(!value);
         b.btnDownload.setEnabled(!value);
+    }
+
+    /** 只接受 https:// 前缀（大小写不敏感）；拒绝 http://、//host/path 等一切非加密形式 */
+    private static boolean isHttpsUrl(@NonNull String url) {
+        return url.regionMatches(true, 0, "https://", 0, "https://".length());
     }
 
     private static boolean isConnectFailure(Exception e) {
