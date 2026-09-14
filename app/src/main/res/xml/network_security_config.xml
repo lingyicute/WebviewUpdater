@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只允许 HTTPS：版本查询与 APK 下载全部走加密通道。
+  显式声明（而不是仅依赖 targetSdk>=28 的默认值），
+  这样在 minSdk 26/27 的设备上也同样是禁止明文。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
