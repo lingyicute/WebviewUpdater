@@ -40,14 +40,15 @@
     <string name="dialog_update_title">发现新版本</string>
     <string name="dialog_update_message">服务器最新 versionCode：%1$d\n当前 versionCode：%2$d\n\n是否下载并安装新版本？</string>
 
-    <string name="dialog_timeout_title">连接超时</string>
-    <string name="dialog_timeout_message">10 秒内未能与服务器建立连接，下载已取消。\n\n请连接 VPN 后再试。</string>
+    <string name="dialog_network_title">没能连上服务器</string>
+    <string name="dialog_network_message">与服务器建立连接失败，本次操作已取消。\n\n请先试试切换网络：\n· Wi-Fi 换成移动数据（或反过来）\n· 换一个 Wi-Fi / 开一下飞行模式再关闭\n\n切换网络后重新点「检查更新」即可。如果换了网络仍然连不上，考虑开启 VPN 后重试。</string>
 
     <string name="dialog_install_perm_title">需要安装权限</string>
     <string name="dialog_install_perm_message">安装 APK 需要允许本应用「安装未知应用」。请在设置中开启后返回。</string>
 
     <string name="dialog_error_title">发生错误</string>
     <string name="error_bad_response">服务器响应格式不正确：%1$s</string>
+    <string name="error_not_https">本应用只允许 HTTPS 连接，已拒绝该地址：%1$s</string>
     <string name="error_http">服务器返回 HTTP %1$d</string>
 
     <string name="powered_by">Powered By</string>
