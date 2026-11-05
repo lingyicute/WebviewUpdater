@@ -2,9 +2,17 @@
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
+  # Runs on pushes targeting the default branch when web assets change
   push:
     branches: ["main"]
+    paths:
+      - "web/**"
+      - ".github/workflows/static.yml"
+
+  # Redeploy after font-subset workflow commits updated subset font
+  workflow_run:
+    workflows: ["Font Subsetting & Embed"]
+    types: [completed]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -24,6 +32,7 @@ concurrency:
 jobs:
   # Single deploy job since we're just deploying
   deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -36,7 +45,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
           path: './web'
       - name: Deploy to GitHub Pages
         id: deployment
