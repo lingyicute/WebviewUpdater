@@ -340,7 +340,7 @@
   <header class="nav">
     <div class="container">
       <a class="brand" href="#top">
-        <img src="/ic.png" alt="app-icon" />
+        <img src="./ic.png" alt="app-icon" />
         WebviewUpdater
       </a>
       <nav class="nav-links">
@@ -575,24 +575,26 @@
       /* ---- 主题切换（浅 / 深） ---- */
       var phone = document.getElementById('phone');
       var segButtons = document.querySelectorAll('.segmented button');
-      function setMode(mode) {
+      function setMode(mode, persist) {
         phone.classList.toggle('dark', mode === 'dark');
         for (var i = 0; i < segButtons.length; i++) {
           segButtons[i].classList.toggle('active', segButtons[i].getAttribute('data-mode') === mode);
         }
-        try { localStorage.setItem('wvu-preview-mode', mode); } catch (e) {}
+        if (persist) {
+          try { localStorage.setItem('wvu-preview-mode', mode); } catch (e) {}
+        }
       }
       for (var i = 0; i < segButtons.length; i++) {
         segButtons[i].addEventListener('click', function () {
-          setMode(this.getAttribute('data-mode'));
+          setMode(this.getAttribute('data-mode'), true);
         });
       }
       var saved = null;
       try { saved = localStorage.getItem('wvu-preview-mode'); } catch (e) {}
       if (saved === 'dark' || saved === 'light') {
-        setMode(saved);
+        setMode(saved, false);
       } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        setMode('dark');
+        setMode('dark', false);
       }
 
       /* ---- 状态栏时钟 ---- */
