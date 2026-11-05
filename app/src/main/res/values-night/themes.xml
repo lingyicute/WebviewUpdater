@@ -5,8 +5,12 @@
         <item name="colorOnPrimary">@color/md_on_primary_dark</item>
         <item name="colorPrimaryContainer">@color/md_primary_container_dark</item>
         <item name="colorOnPrimaryContainer">@color/md_on_primary_container_dark</item>
+        <item name="colorSecondary">@color/md_secondary_dark</item>
+        <item name="colorOnSecondary">@color/md_on_secondary_dark</item>
         <item name="colorSecondaryContainer">@color/md_secondary_container_dark</item>
         <item name="colorOnSecondaryContainer">@color/md_on_secondary_container_dark</item>
+        <item name="colorTertiaryContainer">@color/md_tertiary_container_dark</item>
+        <item name="colorOnTertiaryContainer">@color/md_on_tertiary_container_dark</item>
 
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

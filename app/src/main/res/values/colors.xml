@@ -16,8 +16,10 @@
     <color name="md_on_primary_dark">#062E6F</color>
     <color name="md_primary_container_dark">#0842A0</color>
     <color name="md_on_primary_container_dark">#D3E3FD</color>
+    <color name="md_secondary_dark">#BEC6DC</color>
+    <color name="md_on_secondary_dark">#283041</color>
     <color name="md_secondary_container_dark">#3E4759</color>
     <color name="md_on_secondary_container_dark">#DAE2F9</color>
-
-    <color name="ic_launcher_background">#F9DEDC</color>
+    <color name="md_tertiary_container_dark">#573E5C</color>
+    <color name="md_on_tertiary_container_dark">#FBD7FC</color>
 </resources>
