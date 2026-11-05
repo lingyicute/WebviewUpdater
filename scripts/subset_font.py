@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """子集化 Nebulove 字体并内嵌进 web/index.html"""
-import re, base64, urllib.request, os, sys, tempfile
+import re, base64, urllib.request, os, sys, tempfile, html as html_lib
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT_URL = "https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf"
@@ -43,13 +43,16 @@ def main():
         print(f"Warning: found {len(matches)} @font-face blocks, only the first one is replaced.",
               file=sys.stderr)
 
-    # 1. Collect all characters needed
-    chars = set(html)
+    # 1. Collect all characters needed (exclude old @font-face data URI & unescape HTML entities)
+    html_without_font = FONT_FACE_RE.sub("", html)
+    chars = set(html_lib.unescape(html_without_font))
     # Ensure full ASCII printable set (32 to 126)
     for c in range(32, 127):
         chars.add(chr(c))
     # Common punctuation
     chars.update(['：', '，', '。', '！', '？', '；', '“', '”', '‘', '’', '（', '）', '【', '】', '—', '…', '·', '《', '》', '×', '＝', '÷', '＋', '－'])
+    # Strip control characters (such as \n, \r, \t)
+    chars = {ch for ch in chars if ord(ch) >= 32 and not (0x7F <= ord(ch) <= 0x9F)}
 
     print(f"Total unique characters needed: {len(chars)}")
 
