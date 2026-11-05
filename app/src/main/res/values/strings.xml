@@ -50,6 +50,7 @@
     <string name="error_bad_response">服务器响应格式不正确：%1$s</string>
     <string name="error_not_https">本应用只允许 HTTPS 连接，已拒绝该地址：%1$s</string>
     <string name="error_http">服务器返回 HTTP %1$d</string>
+    <string name="error_download_incomplete">下载文件不完整，请重试</string>
 
     <string name="powered_by">Powered By</string>
     <string name="author_name" translatable="false">lingyicute</string>
