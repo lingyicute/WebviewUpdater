@@ -35,6 +35,7 @@ import java.io.InputStreamReader;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.UnknownHostException;
@@ -61,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private final Runnable hideProgressRunnable = this::hideProgressCard;
 
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private final AtomicBoolean connectTimedOut = new AtomicBoolean(false);
@@ -75,7 +77,8 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<Intent> installPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                if (downloadedApk != null && getPackageManager().canRequestPackageInstalls()) {
+                if (downloadedApk != null && downloadedApk.exists()
+                        && getPackageManager().canRequestPackageInstalls()) {
                     installApk(downloadedApk);
                 }
             });
@@ -100,6 +103,8 @@ public class MainActivity extends AppCompatActivity {
             if (downloadedApk != null && downloadedApk.exists()) {
                 installApk(downloadedApk);
             } else {
+                downloadedApk = null;
+                b.btnDownload.setText(R.string.btn_download);
                 confirmDownload();
             }
         });
@@ -111,14 +116,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 安装完成后返回，刷新当前 WebView 信息
+        // 安装完成后返回，刷新当前 WebView 信息与更新状态
         loadCurrentWebViewInfo();
+        refreshUpdateStateAfterResume();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         cancelled.set(true);
+        abortConnection();
         ui.removeCallbacksAndMessages(null);
         executor.shutdownNow();
     }
@@ -153,6 +160,32 @@ public class MainActivity extends AppCompatActivity {
                 pi.versionName == null ? "?" : pi.versionName, currentVersionCode));
     }
 
+    /**
+     * 从系统安装器返回后同步界面状态：
+     * 若本机 WebView 已升级到 >= latestVersionCode，刷新提示文案、隐藏安装按钮并清理安装包。
+     */
+    private void refreshUpdateStateAfterResume() {
+        if (busy) return;
+        if (downloadedApk != null && !downloadedApk.exists()) {
+            downloadedApk = null;
+            if (b.btnDownload.getVisibility() == View.VISIBLE) {
+                b.btnDownload.setText(R.string.btn_download);
+            }
+        }
+        if (latestVersionCode > 0 && currentVersionCode >= latestVersionCode) {
+            b.tvLatestHint.setText(currentVersionCode == latestVersionCode
+                    ? R.string.latest_is_same
+                    : R.string.latest_is_newer_local);
+            b.tvStatus.setText(R.string.status_up_to_date);
+            b.btnDownload.setVisibility(View.GONE);
+            if (downloadedApk != null) {
+                //noinspection ResultOfMethodCallIgnored
+                downloadedApk.delete();
+                downloadedApk = null;
+            }
+        }
+    }
+
     /** Android 主版本号，如 "14" / "8.1.0" -> 8 */
     private static int androidMajorVersion() {
         String release = Build.VERSION.RELEASE == null ? "" : Build.VERSION.RELEASE;
@@ -170,7 +203,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkUpdate() {
         if (busy) return;
+        cancelled.set(false);
+        connectTimedOut.set(false);
+        connected = false;
         setBusy(true);
+
+        ui.removeCallbacks(hideProgressRunnable);
+        hideProgressCard();
         b.tvStatus.setText(R.string.status_checking);
         b.btnDownload.setVisibility(View.GONE);
         // 清掉上一次检查的结果：否则这次检查失败（超时 / 格式错误）后，
@@ -181,21 +220,24 @@ public class MainActivity extends AppCompatActivity {
         latestApkUrl = null;
         downloadedApk = null;
 
+        // 10 秒连接看门狗：避免 DNS 解析、多 IP 轮询或 TLS 握手超时过长导致界面长时间卡在「正在检查更新…」
+        final Runnable watchdog = () -> {
+            if (!connected && !cancelled.get()) {
+                connectTimedOut.set(true);
+                cancelled.set(true);
+                abortConnection();
+                setBusy(false);
+                b.tvStatus.setText(getString(R.string.status_error, getString(R.string.dialog_network_title)));
+                showNetworkHelpDialog();
+            }
+        };
+        ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
+
         executor.execute(() -> {
             HttpURLConnection conn = null;
             try {
-                URL url = new URL(BASE_URL + androidMajorVersion());
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-                conn.setReadTimeout(READ_TIMEOUT_MS);
-                conn.setInstanceFollowRedirects(true);
-                conn.setRequestProperty("User-Agent", userAgent());
-                conn.setRequestProperty("Cache-Control", "no-cache");
-
-                int code = conn.getResponseCode();
-                if (code != HttpURLConnection.HTTP_OK) {
-                    throw new IOException(getString(R.string.error_http, code));
-                }
+                conn = openWithRedirects(BASE_URL + androidMajorVersion(), null);
+                ui.removeCallbacks(watchdog);
 
                 String body = readAll(conn.getInputStream()).trim();
                 // 期望格式: "versionCode数字[空格]apk下载链接"
@@ -209,6 +251,9 @@ public class MainActivity extends AppCompatActivity {
                 } catch (NumberFormatException e) {
                     throw new IOException(getString(R.string.error_bad_response, abbreviate(body)));
                 }
+                if (ver <= 0) {
+                    throw new IOException(getString(R.string.error_bad_response, abbreviate(body)));
+                }
                 final String apkUrl = parts[1].trim();
                 // 92li.uk 已 HSTS preload：下载地址必须是 https，明文（或畸形 scheme）直接拒绝
                 if (!isHttpsUrl(apkUrl)) {
@@ -216,14 +261,20 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 ui.post(() -> {
+                    if (isFinishing() || isDestroyed() || cancelled.get()) return;
                     setBusy(false);
                     onLatestFetched(ver, apkUrl);
                 });
             } catch (Exception e) {
+                ui.removeCallbacks(watchdog);
+                final boolean timedOut = connectTimedOut.get();
+                final boolean wasCancelled = cancelled.get();
+                final boolean wasConnected = connected;
                 final Exception err = e;
                 ui.post(() -> {
+                    if (timedOut || wasCancelled || isFinishing() || isDestroyed()) return;
                     setBusy(false);
-                    if (isConnectFailure(err)) {
+                    if (!wasConnected && isConnectFailure(err)) {
                         b.tvStatus.setText(getString(R.string.status_error, describe(err)));
                         showNetworkHelpDialog();
                     } else {
@@ -231,6 +282,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             } finally {
+                activeConnection = null;
                 if (conn != null) conn.disconnect();
             }
         });
@@ -261,7 +313,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void confirmDownload() {
-        if (latestApkUrl == null) return;
+        if (latestApkUrl == null || isFinishing() || isDestroyed()) return;
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.dialog_update_title)
                 .setMessage(getString(R.string.dialog_update_message, latestVersionCode,
@@ -283,7 +335,10 @@ public class MainActivity extends AppCompatActivity {
         connected = false;
         setBusy(true);
 
-        // 进度卡片初始为不确定态（此时卡片不可见，允许切换）
+        // 先移除可能尚未执行的延迟隐藏任务并确保卡片处于 GONE，
+        // 避免 LinearProgressIndicator 在可见态下调用 setIndeterminate(true) 抛出 IllegalStateException
+        ui.removeCallbacks(hideProgressRunnable);
+        b.cardProgress.setVisibility(View.GONE);
         b.progress.setIndeterminate(true);
         b.tvProgress.setText(R.string.connecting);
         b.tvSpeed.setText("");
@@ -295,10 +350,12 @@ public class MainActivity extends AppCompatActivity {
         final Runnable watchdog = () -> {
             if (!connected && !cancelled.get()) {
                 connectTimedOut.set(true);
+                cancelled.set(true);
                 abortConnection();
                 hideProgressCard();
                 setBusy(false);
                 b.tvStatus.setText(R.string.status_cancelled);
+                b.btnDownload.setVisibility(View.VISIBLE);
                 showNetworkHelpDialog();
             }
         };
@@ -309,12 +366,13 @@ public class MainActivity extends AppCompatActivity {
             if (dir == null) dir = new File(getFilesDir(), "Download");
             if (!dir.exists()) //noinspection ResultOfMethodCallIgnored
                 dir.mkdirs();
+            cleanupOldApks(dir);
             final File out = new File(dir, "webview_" + targetCode + ".apk");
             final File tmp = new File(dir, "webview_" + targetCode + ".apk.part");
 
             HttpURLConnection conn = null;
             try {
-                conn = openWithRedirects(urlStr);
+                conn = openWithRedirects(urlStr, "application/vnd.android.package-archive, */*");
                 ui.removeCallbacks(watchdog);
 
                 final long total = conn.getContentLengthLong();
@@ -347,12 +405,16 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 if (cancelled.get()) throw new InterruptedIOException("cancelled");
+                if (downloaded <= 0 || (total > 0 && downloaded != total)) {
+                    throw new IOException(getString(R.string.error_download_incomplete));
+                }
                 if (out.exists()) //noinspection ResultOfMethodCallIgnored
                     out.delete();
                 if (!tmp.renameTo(out)) throw new IOException("无法保存文件");
 
                 final long finalDownloaded = downloaded;
                 ui.post(() -> {
+                    if (isFinishing() || isDestroyed() || cancelled.get()) return;
                     updateProgress(finalDownloaded, total > 0 ? total : finalDownloaded, 0);
                     onDownloadFinished(out);
                 });
@@ -365,7 +427,7 @@ public class MainActivity extends AppCompatActivity {
                 final boolean wasConnected = connected;
                 final Exception err = e;
                 ui.post(() -> {
-                    if (timedOut) return; // 看门狗已处理 UI 与弹窗
+                    if (timedOut || isFinishing() || isDestroyed()) return; // 看门狗已处理 UI 与弹窗
                     hideProgressCard();
                     setBusy(false);
                     if (wasCancelled) {
@@ -387,11 +449,26 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /** 清理下载目录中残留的旧版 APK 与临时分片，避免占用数百 MB 存储空间 */
+    private static void cleanupOldApks(@NonNull File dir) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            String name = f.getName();
+            if (f.isFile() && name.startsWith("webview_")
+                    && (name.endsWith(".apk") || name.endsWith(".part"))) {
+                //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            }
+        }
+    }
+
     /**
-     * 手动处理重定向，并在首次连接建立后标记 connected。
+     * 手动处理重定向，并在最终目标连接建立且返回 200 后标记 connected。
      * 只允许 https：即使平台已禁止明文，这里也显式拒绝 30x 到明文地址，避免降级。
      */
-    private HttpURLConnection openWithRedirects(String urlStr) throws IOException {
+    private HttpURLConnection openWithRedirects(
+            @NonNull String urlStr, @Nullable String accept) throws IOException {
         String current = urlStr;
         if (!isHttpsUrl(current)) {
             throw new IOException(getString(R.string.error_not_https, abbreviate(current)));
@@ -403,10 +480,16 @@ public class MainActivity extends AppCompatActivity {
             conn.setReadTimeout(READ_TIMEOUT_MS);
             conn.setInstanceFollowRedirects(false);
             conn.setRequestProperty("User-Agent", userAgent());
-            conn.setRequestProperty("Accept", "application/vnd.android.package-archive, */*");
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            if (accept != null) {
+                conn.setRequestProperty("Accept", accept);
+            }
             activeConnection = conn;
+            if (cancelled.get()) {
+                conn.disconnect();
+                throw new InterruptedIOException("cancelled");
+            }
             conn.connect();
-            connected = true;
 
             int code = conn.getResponseCode();
             if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
@@ -424,6 +507,7 @@ public class MainActivity extends AppCompatActivity {
                 conn.disconnect();
                 throw new IOException(getString(R.string.error_http, code));
             }
+            connected = true;
             return conn;
         }
         throw new IOException("重定向次数过多");
@@ -451,7 +535,9 @@ public class MainActivity extends AppCompatActivity {
         } else {
             b.tvProgress.setText(getString(R.string.progress_unknown, formatBytes(downloaded)));
         }
-        b.tvSpeed.setText(getString(R.string.speed_format, formatBytes((long) bytesPerSec)));
+        b.tvSpeed.setText(bytesPerSec > 0
+                ? getString(R.string.speed_format, formatBytes((long) bytesPerSec))
+                : "");
     }
 
     private void onDownloadFinished(File apk) {
@@ -460,7 +546,7 @@ public class MainActivity extends AppCompatActivity {
         b.tvStatus.setText(R.string.status_download_done);
         b.btnDownload.setText(R.string.btn_install);
         b.btnDownload.setVisibility(View.VISIBLE);
-        ui.postDelayed(this::hideProgressCard, 600);
+        ui.postDelayed(hideProgressRunnable, 600);
         installApk(apk);
     }
 
@@ -473,6 +559,7 @@ public class MainActivity extends AppCompatActivity {
     // ------------------------------------------------------------------ install
 
     private void installApk(@NonNull File apk) {
+        if (isFinishing() || isDestroyed()) return;
         if (!getPackageManager().canRequestPackageInstalls()) {
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_install_perm_title)
@@ -550,6 +637,7 @@ public class MainActivity extends AppCompatActivity {
         return e instanceof SocketTimeoutException
                 || e instanceof UnknownHostException
                 || e instanceof ConnectException
+                || e instanceof SocketException
                 || e instanceof SSLException;
     }
 
@@ -588,11 +676,5 @@ public class MainActivity extends AppCompatActivity {
         double mb = kb / 1024.0;
         if (mb < 1024) return String.format(Locale.US, "%.2f MB", mb);
         return String.format(Locale.US, "%.2f GB", mb / 1024.0);
-    }
-
-    // 未使用但保留以便扩展提示
-    @SuppressWarnings("unused")
-    private void toast(String msg) {
-        Snackbar.make(b.getRoot(), msg, Snackbar.LENGTH_SHORT).show();
     }
 }
