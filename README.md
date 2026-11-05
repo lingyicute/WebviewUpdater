@@ -10,13 +10,18 @@
 - 下载时实时显示进度（已下载 / 总大小 / 百分比）与速度
 - 连接超过 **10 秒** 仍未建立时自动取消，弹窗进行提示
 - 下载完成后通过 FileProvider 唤起系统安装器（自动引导开启「安装未知应用」权限）
-- 自适应矢量图标（含 Android 13+ 单色主题图标）
+- 自适应应用图标（含 Android 13+ 单色主题图标）与矢量应用内图标
 
 ## 目录结构
 
 ```
 .
-├── .github/workflows/build.yml        # GitHub Actions：构建并上传 APK，打 tag 自动发 Release
+├── .github/workflows/
+│   ├── build.yml                      # GitHub Actions：构建 APK 并自动发布 Nightly Release
+│   ├── font-subset.yml                # GitHub Actions：子集化 Nebulove 字体并内嵌到网页
+│   └── static.yml                     # GitHub Actions：部署静态展示页到 GitHub Pages
+├── scripts/subset_font.py             # 网页字体子集化脚本
+├── web/                               # 项目展示网页（GitHub Pages）
 ├── build.gradle / settings.gradle / gradle.properties
 └── app/
     ├── build.gradle
@@ -25,17 +30,20 @@
         ├── java/com/webviewupdater/app/MainActivity.java
         └── res/
             ├── layout/activity_main.xml
-            ├── drawable/ic_launcher_*.xml, ic_app_logo.xml   # 矢量图标
-            ├── mipmap-anydpi-v26/ic_launcher*.xml            # 自适应图标
+            ├── drawable/                                     # 应用内矢量图标与署名头像
+            ├── mipmap-anydpi-v26/ic_launcher.xml             # 自适应图标定义
+            ├── mipmap-xxhdpi/                                # 自适应图标前景 / 背景 / 单色图层
             ├── values/, values-night/                        # 主题 / 颜色 / 字符串
-            └── xml/file_paths.xml                            # FileProvider
+            └── xml/
+                ├── file_paths.xml                            # FileProvider 路径配置
+                └── network_security_config.xml               # 网络安全配置（仅允许 HTTPS）
 ```
 
 ## 构建
 
 - 要求：JDK 17、Android SDK 34
 - 本地：`gradle assembleRelease`（工程未附带 wrapper，可先执行 `gradle wrapper --gradle-version 8.7`）
-- CI：推送到 `main`/`master` 或手动触发即可产出 `WebViewUpdater-apk` 构件并自动创建 GitHub Release
+- CI：推送代码变更或手动触发即可构建 `WebViewUpdater-v1.0.0-release.apk` 并自动创建 `nightly-<run_number>` GitHub Release
 
 > [!tip]
 > Release 构建默认使用 debug 密钥签名，便于直接安装测试。请在 `app/build.gradle` 中配置自己的 signingConfig。
