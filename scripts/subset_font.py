@@ -13,19 +13,31 @@ DOWNLOAD_TIMEOUT_SEC = 60
 FONT_FACE_RE = re.compile(r'@font-face\s*\{[^}]*\}', re.DOTALL)
 HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
 BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+SCRIPT_TAG_RE = re.compile(r'(<script\b[^>]*>)(.*?)(</script>)', re.DOTALL | re.IGNORECASE)
+JS_LINE_COMMENT_RE = re.compile(r'(?:^|(?<=[\s;{}()]))//[^\r\n]*', re.MULTILINE)
 
 
 def download(url, dest):
-    """带超时的下载到文件（urllib.request.urlretrieve 无超时参数）"""
+    """带超时的下载到文件（urllib.request.urlretrieve 无超时参数），并校验 Content-Length 完整性"""
     req = urllib.request.Request(url, headers={"User-Agent": "webviewupdater-font-subset/1.0"})
     with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT_SEC) as resp, open(dest, "wb") as out:
+        expected_header = resp.headers.get("Content-Length")
+        total_read = 0
         while True:
             chunk = resp.read(64 * 1024)
             if not chunk:
                 break
             out.write(chunk)
-    if os.path.getsize(dest) <= 0:
+            total_read += len(chunk)
+    if total_read <= 0:
         raise IOError("Downloaded font file is empty")
+    if expected_header is not None:
+        try:
+            expected_size = int(expected_header.strip())
+        except ValueError:
+            expected_size = -1
+        if expected_size > 0 and total_read != expected_size:
+            raise IOError(f"Incomplete font download: got {total_read} bytes, expected {expected_size}")
 
 
 def main():
@@ -52,6 +64,10 @@ def main():
     html_without_font = FONT_FACE_RE.sub("", html)
     html_without_comments = HTML_COMMENT_RE.sub("", html_without_font)
     html_without_comments = BLOCK_COMMENT_RE.sub("", html_without_comments)
+    html_without_comments = SCRIPT_TAG_RE.sub(
+        lambda m: m.group(1) + JS_LINE_COMMENT_RE.sub("", m.group(2)) + m.group(3),
+        html_without_comments,
+    )
     chars = set(html_lib.unescape(html_without_comments))
     # Ensure full ASCII printable set (32 to 126)
     for c in range(32, 127):
@@ -63,26 +79,32 @@ def main():
 
     print(f"Total unique characters needed: {len(chars)}")
 
+    from fontTools.ttLib import TTFont
+    from fontTools.subset import Subsetter, Options
+
     with tempfile.TemporaryDirectory(prefix="nebulove-subset-") as workdir:
         tmp_font_path = os.path.join(workdir, "Nebulove.ttf")
         tmp_woff2 = os.path.join(workdir, "Nebulove-Subset.woff2")
 
-        # 2. Download full Nebulove font (with mirror fallback)
+        # 2. Download full Nebulove font and verify TTFont validity (with mirror fallback)
         print(f"Downloading font from {FONT_URL}...")
         try:
             download(FONT_URL, tmp_font_path)
+            with TTFont(tmp_font_path, recalcTimestamp=False) as check_font:
+                _ = check_font["head"]
         except Exception as e1:
-            print(f"Primary download failed ({e1}), trying mirror {FONT_MIRROR_URL}...", file=sys.stderr)
+            print(f"Primary download/parse failed ({e1}), trying mirror {FONT_MIRROR_URL}...", file=sys.stderr)
             try:
+                if os.path.exists(tmp_font_path):
+                    os.remove(tmp_font_path)
                 download(FONT_MIRROR_URL, tmp_font_path)
+                with TTFont(tmp_font_path, recalcTimestamp=False) as check_font:
+                    _ = check_font["head"]
             except Exception as e2:
-                print(f"Failed to download font: {e2}", file=sys.stderr)
+                print(f"Failed to download valid font: {e2}", file=sys.stderr)
                 sys.exit(1)
 
         # 3. Subset font using fontTools
-        from fontTools.ttLib import TTFont
-        from fontTools.subset import Subsetter, Options
-
         print("Subsetting font...")
         # recalcTimestamp=False：TTFont 默认为 True，见下面「固定时间戳」的说明
         with TTFont(tmp_font_path, recalcTimestamp=False) as font:
