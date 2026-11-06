@@ -101,7 +101,9 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<Intent> installPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                loadCurrentWebViewInfo();
                 if (downloadedApk != null && downloadedApk.exists()
+                        && (latestVersionCode <= 0 || currentVersionCode < 0 || currentVersionCode < latestVersionCode)
                         && getPackageManager().canRequestPackageInstalls()) {
                     installApk(downloadedApk);
                 }
@@ -121,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
             String apkPath = savedInstanceState.getString(KEY_DOWNLOADED_APK);
             if (apkPath != null) {
                 File f = new File(apkPath);
-                if (f.exists()) {
+                if (isValidApk(f)) {
                     downloadedApk = f;
                 }
             }
@@ -201,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
         PackageInfo pi = null;
         try {
             pi = WebView.getCurrentWebViewPackage();
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
         }
 
         if (pi == null) {
@@ -221,6 +223,9 @@ public class MainActivity extends AppCompatActivity {
         CharSequence label = pi.applicationInfo != null
                 ? getPackageManager().getApplicationLabel(pi.applicationInfo)
                 : pi.packageName;
+        if (label == null || label.length() == 0) {
+            label = pi.packageName;
+        }
         b.tvCurrentName.setText(label);
         b.tvCurrentPkg.setText(pi.packageName);
         b.tvCurrentPkg.setVisibility(View.VISIBLE);
@@ -258,6 +263,7 @@ public class MainActivity extends AppCompatActivity {
                 downloadedApk.delete();
                 downloadedApk = null;
             }
+            executor.execute(this::cleanupDownloadDirs);
         } else {
             b.tvLatestHint.setText(R.string.latest_is_newer);
             if (downloadedApk != null && downloadedApk.exists()) {
@@ -272,6 +278,8 @@ public class MainActivity extends AppCompatActivity {
                         || curStatus.equals(getString(R.string.status_download_done))) {
                     b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
                 }
+            } else {
+                b.btnDownload.setVisibility(View.GONE);
             }
         }
     }
@@ -334,6 +342,9 @@ public class MainActivity extends AppCompatActivity {
                 ui.removeCallbacks(watchdog);
 
                 String body = readAll(conn.getInputStream()).trim();
+                if (body.startsWith("\uFEFF")) {
+                    body = body.substring(1).trim();
+                }
                 // 期望格式: "versionCode数字[空格]apk下载链接"
                 String[] parts = body.split("\\s+");
                 if (parts.length != 2) {
@@ -397,14 +408,13 @@ public class MainActivity extends AppCompatActivity {
             b.btnDownload.setText(R.string.btn_download);
             b.btnDownload.setVisibility(View.VISIBLE);
             confirmDownload();
-        } else if (currentVersionCode == ver) {
-            b.tvLatestHint.setText(R.string.latest_is_same);
-            b.tvStatus.setText(R.string.status_up_to_date);
-            b.btnDownload.setVisibility(View.GONE);
         } else {
-            b.tvLatestHint.setText(R.string.latest_is_newer_local);
+            b.tvLatestHint.setText(currentVersionCode == ver
+                    ? R.string.latest_is_same
+                    : R.string.latest_is_newer_local);
             b.tvStatus.setText(R.string.status_up_to_date);
             b.btnDownload.setVisibility(View.GONE);
+            executor.execute(this::cleanupDownloadDirs);
         }
     }
 
@@ -436,6 +446,7 @@ public class MainActivity extends AppCompatActivity {
         b.progress.setIndeterminate(true);
         b.tvProgress.setText(R.string.connecting);
         b.tvSpeed.setText("");
+        b.btnCancel.setEnabled(true);
         b.cardProgress.setVisibility(View.VISIBLE);
         b.tvStatus.setText(R.string.status_downloading);
         b.btnDownload.setVisibility(View.GONE);
@@ -457,6 +468,7 @@ public class MainActivity extends AppCompatActivity {
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
 
         executor.execute(() -> {
+            if (task.cancelled.get()) return;
             File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
             if (dir == null) dir = new File(getFilesDir(), "Download");
             if (!dir.exists()) //noinspection ResultOfMethodCallIgnored
@@ -508,7 +520,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
-                if (downloaded <= 0 || (total > 0 && downloaded != total)) {
+                if (downloaded <= 0 || (total > 0 && downloaded != total) || !isValidApk(tmp)) {
                     throw new IOException(getString(R.string.error_download_incomplete));
                 }
                 if (out.exists()) //noinspection ResultOfMethodCallIgnored
@@ -554,6 +566,17 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void cleanupDownloadDirs() {
+        File extDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (extDir != null && extDir.exists()) {
+            cleanupOldApks(extDir);
+        }
+        File intDir = new File(getFilesDir(), "Download");
+        if (intDir.exists()) {
+            cleanupOldApks(intDir);
+        }
+    }
+
     /** 清理下载目录中残留的旧版 APK 与临时分片，避免占用数百 MB 存储空间 */
     private static void cleanupOldApks(@NonNull File dir) {
         File[] files = dir.listFiles();
@@ -565,6 +588,19 @@ public class MainActivity extends AppCompatActivity {
                 //noinspection ResultOfMethodCallIgnored
                 f.delete();
             }
+        }
+    }
+
+    /** 校验文件是否为可解析的 APK 归档，防止截断流或错误网关 HTML 被当作安装包 */
+    private boolean isValidApk(@Nullable File apk) {
+        if (apk == null || !apk.isFile() || apk.length() <= 0) {
+            return false;
+        }
+        try {
+            PackageInfo info = getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+            return info != null && info.packageName != null && !info.packageName.isEmpty();
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -599,12 +635,15 @@ public class MainActivity extends AppCompatActivity {
                 conn.connect();
 
                 int code = conn.getResponseCode();
+                if (task.cancelled.get()) {
+                    throw new InterruptedIOException("cancelled");
+                }
                 if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                     String location = conn.getHeaderField("Location");
-                    if (location == null) {
+                    if (location == null || location.trim().isEmpty()) {
                         throw new IOException(getString(R.string.error_redirect_no_location));
                     }
-                    String next = new URL(new URL(current), location).toString();
+                    String next = new URL(new URL(current), location.trim()).toString();
                     if (!isHttpsUrl(next)) {
                         throw new IOException(getString(R.string.error_not_https, abbreviate(next)));
                     }
@@ -653,6 +692,7 @@ public class MainActivity extends AppCompatActivity {
     private void onDownloadFinished(File apk) {
         downloadedApk = apk;
         setBusy(false);
+        b.btnCancel.setEnabled(false);
         b.tvStatus.setText(R.string.status_download_done);
         b.btnDownload.setText(R.string.btn_install);
         b.btnDownload.setVisibility(View.VISIBLE);
@@ -670,6 +710,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void installApk(@NonNull File apk) {
         if (isFinishing() || isDestroyed()) return;
+        if (!apk.isFile() || apk.length() <= 0) {
+            downloadedApk = null;
+            b.btnDownload.setText(R.string.btn_download);
+            confirmDownload();
+            return;
+        }
         if (!getPackageManager().canRequestPackageInstalls()) {
             showDialog(new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_install_perm_title)
@@ -783,12 +829,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private static boolean isConnectFailure(Exception e) {
-        return e instanceof SocketTimeoutException
-                || e instanceof UnknownHostException
-                || e instanceof ConnectException
-                || e instanceof SocketException
-                || e instanceof SSLException;
+    private static boolean isConnectFailure(@Nullable Throwable e) {
+        while (e != null) {
+            if (e instanceof SocketTimeoutException
+                    || e instanceof UnknownHostException
+                    || e instanceof ConnectException
+                    || e instanceof SocketException
+                    || e instanceof SSLException) {
+                return true;
+            }
+            e = e.getCause();
+        }
+        return false;
     }
 
     private String userAgent() {
@@ -801,8 +853,10 @@ public class MainActivity extends AppCompatActivity {
         return m;
     }
 
-    private static String abbreviate(String s) {
-        return s.length() > 80 ? s.substring(0, 80) + "…" : s;
+    private static String abbreviate(@NonNull String s) {
+        if (s.length() <= 80) return s;
+        int end = Character.isHighSurrogate(s.charAt(79)) ? 79 : 80;
+        return s.substring(0, end) + "…";
     }
 
     private static String readAll(InputStream in) throws IOException {
