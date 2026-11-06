@@ -7,6 +7,9 @@ on:
       - "scripts/**"
       - "README.md"
       - "LICENSE"
+      - "bg.jpg"
+      - "icon_512.png"
+      - ".gitignore"
       - ".github/workflows/static.yml"
       - ".github/workflows/font-subset.yml"
   workflow_dispatch:
@@ -42,12 +45,15 @@ jobs:
       - name: Build release APK (signed with debug key)
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Create Release
+      - name: Create or Update Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "nightly-${{ github.run_number }}"  app/build/outputs/apk/release/*.apk \
-            --title "Nightly No.${{ github.run_number }}" \
-            --notes-file - << 'EOF'
-          自动构建 No.${{ github.run_number }}
-          EOF
+          TAG="nightly-${{ github.run_number }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" app/build/outputs/apk/release/*.apk --clobber
+          else
+            gh release create "$TAG" app/build/outputs/apk/release/*.apk \
+              --title "Nightly No.${{ github.run_number }}" \
+              --notes "自动构建 No.${{ github.run_number }}"
+          fi
