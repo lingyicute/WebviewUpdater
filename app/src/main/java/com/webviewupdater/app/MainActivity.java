@@ -60,14 +60,31 @@ public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding b;
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private static final class RequestTask {
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        final AtomicBoolean connectTimedOut = new AtomicBoolean(false);
+        volatile boolean connected = false;
+        @Nullable volatile HttpURLConnection activeConnection;
+        @Nullable Runnable watchdog;
+
+        void cancel() {
+            cancelled.set(true);
+            abortConnection();
+        }
+
+        void abortConnection() {
+            final HttpURLConnection c = activeConnection;
+            if (c != null) {
+                new Thread(c::disconnect, "abort-conn").start();
+            }
+        }
+    }
+
+    private final ExecutorService executor = Executors.newCachedThreadPool();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable hideProgressRunnable = this::hideProgressCard;
 
-    private final AtomicBoolean cancelled = new AtomicBoolean(false);
-    private final AtomicBoolean connectTimedOut = new AtomicBoolean(false);
-    private volatile boolean connected = false;
-    private volatile HttpURLConnection activeConnection;
+    @Nullable private RequestTask activeTask;
     private boolean busy = false;
 
     private long currentVersionCode = -1;
@@ -124,10 +141,28 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        cancelled.set(true);
-        abortConnection();
+        cancelActiveTask();
         ui.removeCallbacksAndMessages(null);
         executor.shutdownNow();
+    }
+
+    @NonNull
+    private RequestTask startNewTask() {
+        cancelActiveTask();
+        RequestTask task = new RequestTask();
+        activeTask = task;
+        return task;
+    }
+
+    private void cancelActiveTask() {
+        RequestTask task = activeTask;
+        activeTask = null;
+        if (task != null) {
+            if (task.watchdog != null) {
+                ui.removeCallbacks(task.watchdog);
+            }
+            task.cancel();
+        }
     }
 
     // ------------------------------------------------------------------ current WebView
@@ -203,9 +238,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkUpdate() {
         if (busy) return;
-        cancelled.set(false);
-        connectTimedOut.set(false);
-        connected = false;
+        final RequestTask task = startNewTask();
         setBusy(true);
 
         ui.removeCallbacks(hideProgressRunnable);
@@ -222,21 +255,22 @@ public class MainActivity extends AppCompatActivity {
 
         // 10 秒连接看门狗：避免 DNS 解析、多 IP 轮询或 TLS 握手超时过长导致界面长时间卡在「正在检查更新…」
         final Runnable watchdog = () -> {
-            if (!connected && !cancelled.get()) {
-                connectTimedOut.set(true);
-                cancelled.set(true);
-                abortConnection();
+            if (!task.connected && !task.cancelled.get() && activeTask == task) {
+                task.connectTimedOut.set(true);
+                task.cancel();
+                activeTask = null;
                 setBusy(false);
                 b.tvStatus.setText(getString(R.string.status_error, getString(R.string.dialog_network_title)));
                 showNetworkHelpDialog();
             }
         };
+        task.watchdog = watchdog;
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
 
         executor.execute(() -> {
             HttpURLConnection conn = null;
             try {
-                conn = openWithRedirects(BASE_URL + androidMajorVersion(), null);
+                conn = openWithRedirects(BASE_URL + androidMajorVersion(), null, task);
                 ui.removeCallbacks(watchdog);
 
                 String body = readAll(conn.getInputStream()).trim();
@@ -261,18 +295,20 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 ui.post(() -> {
-                    if (isFinishing() || isDestroyed() || cancelled.get()) return;
+                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
+                    activeTask = null;
                     setBusy(false);
                     onLatestFetched(ver, apkUrl);
                 });
             } catch (Exception e) {
                 ui.removeCallbacks(watchdog);
-                final boolean timedOut = connectTimedOut.get();
-                final boolean wasCancelled = cancelled.get();
-                final boolean wasConnected = connected;
+                final boolean timedOut = task.connectTimedOut.get();
+                final boolean wasCancelled = task.cancelled.get();
+                final boolean wasConnected = task.connected;
                 final Exception err = e;
                 ui.post(() -> {
-                    if (timedOut || wasCancelled || isFinishing() || isDestroyed()) return;
+                    if (timedOut || wasCancelled || isFinishing() || isDestroyed() || activeTask != task) return;
+                    activeTask = null;
                     setBusy(false);
                     if (!wasConnected && isConnectFailure(err)) {
                         b.tvStatus.setText(getString(R.string.status_error, describe(err)));
@@ -282,7 +318,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             } finally {
-                activeConnection = null;
+                task.activeConnection = null;
                 if (conn != null) conn.disconnect();
             }
         });
@@ -330,9 +366,7 @@ public class MainActivity extends AppCompatActivity {
         final String urlStr = latestApkUrl;
         final long targetCode = latestVersionCode;
 
-        cancelled.set(false);
-        connectTimedOut.set(false);
-        connected = false;
+        final RequestTask task = startNewTask();
         setBusy(true);
 
         // 先移除可能尚未执行的延迟隐藏任务并确保卡片处于 GONE，
@@ -348,10 +382,10 @@ public class MainActivity extends AppCompatActivity {
 
         // 10 秒连接看门狗：连接尚未建立则取消并提示切换网络
         final Runnable watchdog = () -> {
-            if (!connected && !cancelled.get()) {
-                connectTimedOut.set(true);
-                cancelled.set(true);
-                abortConnection();
+            if (!task.connected && !task.cancelled.get() && activeTask == task) {
+                task.connectTimedOut.set(true);
+                task.cancel();
+                activeTask = null;
                 hideProgressCard();
                 setBusy(false);
                 b.tvStatus.setText(R.string.status_cancelled);
@@ -359,6 +393,7 @@ public class MainActivity extends AppCompatActivity {
                 showNetworkHelpDialog();
             }
         };
+        task.watchdog = watchdog;
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
 
         executor.execute(() -> {
@@ -368,11 +403,12 @@ public class MainActivity extends AppCompatActivity {
                 dir.mkdirs();
             cleanupOldApks(dir);
             final File out = new File(dir, "webview_" + targetCode + ".apk");
-            final File tmp = new File(dir, "webview_" + targetCode + ".apk.part");
+            final File tmp = new File(dir, "webview_" + targetCode + "_"
+                    + SystemClock.elapsedRealtimeNanos() + ".apk.part");
 
             HttpURLConnection conn = null;
             try {
-                conn = openWithRedirects(urlStr, "application/vnd.android.package-archive, */*");
+                conn = openWithRedirects(urlStr, "application/vnd.android.package-archive, */*", task);
                 ui.removeCallbacks(watchdog);
 
                 final long total = conn.getContentLengthLong();
@@ -386,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] buf = new byte[64 * 1024];
                     int n;
                     while ((n = in.read(buf)) != -1) {
-                        if (cancelled.get()) throw new InterruptedIOException("cancelled");
+                        if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
                         fos.write(buf, 0, n);
                         downloaded += n;
 
@@ -398,13 +434,16 @@ public class MainActivity extends AppCompatActivity {
                             lastBytes = downloaded;
                             final long d = downloaded;
                             final double s = speed;
-                            ui.post(() -> updateProgress(d, total, s));
+                            ui.post(() -> {
+                                if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
+                                updateProgress(d, total, s);
+                            });
                         }
                     }
                     fos.flush();
                 }
 
-                if (cancelled.get()) throw new InterruptedIOException("cancelled");
+                if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
                 if (downloaded <= 0 || (total > 0 && downloaded != total)) {
                     throw new IOException(getString(R.string.error_download_incomplete));
                 }
@@ -414,7 +453,8 @@ public class MainActivity extends AppCompatActivity {
 
                 final long finalDownloaded = downloaded;
                 ui.post(() -> {
-                    if (isFinishing() || isDestroyed() || cancelled.get()) return;
+                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
+                    activeTask = null;
                     updateProgress(finalDownloaded, total > 0 ? total : finalDownloaded, 0);
                     onDownloadFinished(out);
                 });
@@ -422,12 +462,13 @@ public class MainActivity extends AppCompatActivity {
                 ui.removeCallbacks(watchdog);
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
-                final boolean wasCancelled = cancelled.get();
-                final boolean timedOut = connectTimedOut.get();
-                final boolean wasConnected = connected;
+                final boolean wasCancelled = task.cancelled.get();
+                final boolean timedOut = task.connectTimedOut.get();
+                final boolean wasConnected = task.connected;
                 final Exception err = e;
                 ui.post(() -> {
-                    if (timedOut || isFinishing() || isDestroyed()) return; // 看门狗已处理 UI 与弹窗
+                    if (timedOut || isFinishing() || isDestroyed() || activeTask != task) return; // 看门狗或主动取消已处理 UI
+                    activeTask = null;
                     hideProgressCard();
                     setBusy(false);
                     if (wasCancelled) {
@@ -443,7 +484,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             } finally {
-                activeConnection = null;
+                task.activeConnection = null;
                 if (conn != null) conn.disconnect();
             }
         });
@@ -468,13 +509,13 @@ public class MainActivity extends AppCompatActivity {
      * 只允许 https：即使平台已禁止明文，这里也显式拒绝 30x 到明文地址，避免降级。
      */
     private HttpURLConnection openWithRedirects(
-            @NonNull String urlStr, @Nullable String accept) throws IOException {
+            @NonNull String urlStr, @Nullable String accept, @NonNull RequestTask task) throws IOException {
         String current = urlStr;
         if (!isHttpsUrl(current)) {
             throw new IOException(getString(R.string.error_not_https, abbreviate(current)));
         }
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
-            if (cancelled.get()) throw new InterruptedIOException("cancelled");
+            if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
             HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(READ_TIMEOUT_MS);
@@ -484,8 +525,8 @@ public class MainActivity extends AppCompatActivity {
             if (accept != null) {
                 conn.setRequestProperty("Accept", accept);
             }
-            activeConnection = conn;
-            if (cancelled.get()) {
+            task.activeConnection = conn;
+            if (task.cancelled.get()) {
                 conn.disconnect();
                 throw new InterruptedIOException("cancelled");
             }
@@ -507,22 +548,19 @@ public class MainActivity extends AppCompatActivity {
                 conn.disconnect();
                 throw new IOException(getString(R.string.error_http, code));
             }
-            connected = true;
+            task.connected = true;
             return conn;
         }
         throw new IOException("重定向次数过多");
     }
 
     private void cancelDownload() {
-        cancelled.set(true);
-        abortConnection();
-    }
-
-    private void abortConnection() {
-        final HttpURLConnection c = activeConnection;
-        if (c != null) {
-            new Thread(c::disconnect, "abort-conn").start();
-        }
+        if (activeTask == null) return;
+        cancelActiveTask();
+        hideProgressCard();
+        setBusy(false);
+        b.tvStatus.setText(R.string.status_cancelled);
+        b.btnDownload.setVisibility(View.VISIBLE);
     }
 
     private void updateProgress(long downloaded, long total, double bytesPerSec) {
