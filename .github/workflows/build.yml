@@ -2,6 +2,7 @@ name: Build Android APK
 
 on:
   push:
+    branches: ["main"]
     paths-ignore:
       - "web/**"
       - "scripts/**"
@@ -54,6 +55,7 @@ jobs:
             gh release upload "$TAG" app/build/outputs/apk/release/*.apk --clobber
           else
             gh release create "$TAG" app/build/outputs/apk/release/*.apk \
+              --target "${{ github.sha }}" \
               --title "Nightly No.${{ github.run_number }}" \
               --notes "自动构建 No.${{ github.run_number }}"
           fi
