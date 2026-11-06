@@ -60,7 +60,7 @@
 
     /* ========== 基础 ========== */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; scroll-padding-top: 64px; }
     body {
       font-family: "Nebulove", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       color: var(--text);
@@ -68,6 +68,7 @@
       background-attachment: fixed;
       line-height: 1.6;
       overflow-x: hidden;
+      overflow-x: clip;
       -webkit-font-smoothing: antialiased;
     }
     a { color: inherit; text-decoration: none; }
@@ -187,7 +188,7 @@
     .app-head { display: flex; align-items: center; padding: 12px 0; }
     .app-icon {
       width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
-      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s;
+      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s, color .35s;
     }
     .app-icon svg { width: 32px; height: 32px; }
     .app-head-text { margin-left: 16px; }
@@ -195,7 +196,7 @@
     .app-head-text .s { margin-top: 2px; font-size: 14px; color: var(--m-on-surface-variant); }
     .m-card {
       margin-top: 8px; padding: 20px; border-radius: 24px;
-      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s;
+      background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s, color .35s;
     }
     .m-card .label { font-size: 14px; font-weight: 500; }
     .m-card .title { margin-top: 6px; font-size: 24px; line-height: 32px; }
@@ -207,7 +208,7 @@
       font-family: inherit; font-size: 14px; font-weight: 500;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       background: var(--m-primary); color: var(--m-on-primary);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: filter .2s, transform .1s, background .35s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: filter .2s, transform .1s, background .35s, color .35s;
     }
     .m-btn:hover:not(:disabled) { filter: brightness(1.1); }
     .m-btn:active:not(:disabled) { transform: scale(0.99); }
@@ -314,7 +315,9 @@
     .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
     .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
       .reveal { opacity: 1; transform: none; transition: none; }
+      .card:hover { transform: none; }
       .m-btn.spinning svg { animation: none; }
     }
   </style>
@@ -348,7 +351,7 @@
         <a href="#how">原理</a>
         <a href="#build">构建</a>
         <a href="#author">作者</a>
-        <a class="primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">
+        <a class="primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noopener noreferrer">
           <svg aria-hidden="true"><use href="#i-github"/></svg> GitHub
         </a>
       </nav>
@@ -367,10 +370,10 @@
             自动识别当前 WebView 提供者，按 Android 版本匹配最新可用版本，下载、安装一气呵成。
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater/releases" target="_blank" rel="noreferrer">
+            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater/releases" target="_blank" rel="noopener noreferrer">
               <svg aria-hidden="true"><use href="#i-download"/></svg> 下载 APK
             </a>
-            <a class="btn btn-ghost" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">
+            <a class="btn btn-ghost" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noopener noreferrer">
               <svg aria-hidden="true"><use href="#i-github"/></svg> 查看源码
             </a>
           </div>
@@ -394,7 +397,7 @@
           <div class="phone" id="phone">
             <div class="status-bar">
               <span id="clock">12:30</span>
-              <span><span>100% 〇</span></span>
+              <span>100% 〇</span>
             </div>
             <div class="toolbar">WebView 更新小助手</div>
             <div class="screen">
@@ -428,8 +431,8 @@
                   <span>lingyicute</span>
                 </div>
                 <div class="links">
-                  <a href="https://92li.uk" target="_blank" rel="noreferrer"><svg aria-hidden="true"><use href="#i-home"/></svg>主页</a>
-                  <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer"><svg aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+                  <a href="https://92li.uk" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-home"/></svg>主页</a>
+                  <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
                 </div>
               </div>
             </div>
@@ -520,7 +523,7 @@
         </div>
         <div class="build-grid">
           <div class="terminal reveal">
-            <div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+            <div class="dots" aria-hidden="true"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
             <div><span class="c"># 要求：JDK 17、Android SDK 34</span></div>
             <div><span class="p">$</span> git clone https://github.com/lingyicute/WebviewUpdater.git</div>
             <div><span class="p">$</span> cd WebviewUpdater</div>
@@ -553,8 +556,8 @@
             <p>Writing code that respects freedom. ❤️</p>
           </div>
           <div class="links">
-            <a class="btn btn-ghost" href="https://92li.uk" target="_blank" rel="noreferrer"><svg aria-hidden="true"><use href="#i-home"/></svg> 92li.uk</a>
-            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer"><svg aria-hidden="true"><use href="#i-github"/></svg> lingyicute/WebviewUpdater</a>
+            <a class="btn btn-ghost" href="https://92li.uk" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-home"/></svg> 92li.uk</a>
+            <a class="btn btn-primary" href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true"><use href="#i-github"/></svg> lingyicute/WebviewUpdater</a>
           </div>
         </div>
       </div>
@@ -563,8 +566,8 @@
 
   <footer>
     <div class="container">
-      © <span id="year"></span> <a href="https://92li.uk" target="_blank" rel="noreferrer">lingyicute</a> · WebviewUpdater ·
-      <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noreferrer">GitHub</a>
+      © <span id="year"></span> <a href="https://92li.uk" target="_blank" rel="noopener noreferrer">lingyicute</a> · WebviewUpdater ·
+      <a href="https://github.com/lingyicute/WebviewUpdater" target="_blank" rel="noopener noreferrer">GitHub</a>
     </div>
   </footer>
 
