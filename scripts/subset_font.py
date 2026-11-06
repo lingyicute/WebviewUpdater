@@ -4,12 +4,15 @@ import re, base64, urllib.request, os, sys, tempfile, html as html_lib
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT_URL = "https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf"
+FONT_MIRROR_URL = "https://cdn.jsdelivr.net/gh/lingyicute/Nebulove@main/Nebulove.ttf"
 FALLBACK_URL = "https://cdn.jsdelivr.net/gh/lingyicute/Nebulove@main/Nebulove.woff2"
 INDEX_PATH = os.path.join(REPO_ROOT, "web", "index.html")
 # 下载超时（秒）：没有超时机制时，网络异常会让 CI 一直卡到 job 超时
 DOWNLOAD_TIMEOUT_SEC = 60
-# 匹配样式表里的 @font-face 块
+# 匹配样式表里的 @font-face 块及 HTML / CSS / JS 注释
 FONT_FACE_RE = re.compile(r'@font-face\s*\{[^}]*\}', re.DOTALL)
+HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
+BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
 
 
 def download(url, dest):
@@ -21,6 +24,8 @@ def download(url, dest):
             if not chunk:
                 break
             out.write(chunk)
+    if os.path.getsize(dest) <= 0:
+        raise IOError("Downloaded font file is empty")
 
 
 def main():
@@ -43,9 +48,11 @@ def main():
         print(f"Warning: found {len(matches)} @font-face blocks, only the first one is replaced.",
               file=sys.stderr)
 
-    # 1. Collect all characters needed (exclude old @font-face data URI & unescape HTML entities)
+    # 1. Collect all characters needed (exclude old @font-face data URI, comments & unescape HTML entities)
     html_without_font = FONT_FACE_RE.sub("", html)
-    chars = set(html_lib.unescape(html_without_font))
+    html_without_comments = HTML_COMMENT_RE.sub("", html_without_font)
+    html_without_comments = BLOCK_COMMENT_RE.sub("", html_without_comments)
+    chars = set(html_lib.unescape(html_without_comments))
     # Ensure full ASCII printable set (32 to 126)
     for c in range(32, 127):
         chars.add(chr(c))
@@ -60,13 +67,17 @@ def main():
         tmp_font_path = os.path.join(workdir, "Nebulove.ttf")
         tmp_woff2 = os.path.join(workdir, "Nebulove-Subset.woff2")
 
-        # 2. Download full Nebulove font
+        # 2. Download full Nebulove font (with mirror fallback)
         print(f"Downloading font from {FONT_URL}...")
         try:
             download(FONT_URL, tmp_font_path)
-        except Exception as e:
-            print(f"Failed to download font: {e}", file=sys.stderr)
-            sys.exit(1)
+        except Exception as e1:
+            print(f"Primary download failed ({e1}), trying mirror {FONT_MIRROR_URL}...", file=sys.stderr)
+            try:
+                download(FONT_MIRROR_URL, tmp_font_path)
+            except Exception as e2:
+                print(f"Failed to download font: {e2}", file=sys.stderr)
+                sys.exit(1)
 
         # 3. Subset font using fontTools
         from fontTools.ttLib import TTFont
@@ -74,27 +85,27 @@ def main():
 
         print("Subsetting font...")
         # recalcTimestamp=False：TTFont 默认为 True，见下面「固定时间戳」的说明
-        font = TTFont(tmp_font_path, recalcTimestamp=False)
-        subsetter = Subsetter(options=Options())
-        # 排序是防御性措施：chars 是 set，其遍历顺序受字符串哈希随机化影响而随进程变化；
-        # 排序后喂给 subsetter 的输入与进程无关（subsetter 结果本身与顺序无关，但少一个变量更好）。
-        subsetter.populate(text="".join(sorted(chars)))
-        subsetter.subset(font)
+        with TTFont(tmp_font_path, recalcTimestamp=False) as font:
+            subsetter = Subsetter(options=Options())
+            # 排序是防御性措施：chars 是 set，其遍历顺序受字符串哈希随机化影响而随进程变化；
+            # 排序后喂给 subsetter 的输入与进程无关（subsetter 结果本身与顺序无关，但少一个变量更好）。
+            subsetter.populate(text="".join(sorted(chars)))
+            subsetter.subset(font)
 
-        # 固定时间戳，保证同样输入产出字节一致的 WOFF2，
-        # 否则每次运行都会因为 head.modified 变化而产生无意义的 commit。
-        # 注意：只改 head.modified 是不够的 —— fontTools 在 head 表 compile 时
-        # 会执行 `if ttFont.recalcTimestamp: self.modified = timestampNow()`，
-        # 把刚赋的值又覆盖成当前时间，于是每次产出的 WOFF2 字节都不同
-        # （压缩后大小会差几十字节），diff 永远不为空，CI 每次都会提交一个
-        # 「perf: 更新 Nebulove 字体子集」的空转 commit。
-        # 必须同时关掉 recalcTimestamp，这个固定才真正生效。
-        # 取 created 而不是 0：0 会被 fontTools 判定为异常小的时间戳并在
-        # stderr 打 warning（读回时还会被加上 Mac epoch 偏移）。
-        font["head"].modified = font["head"].created
+            # 固定时间戳，保证同样输入产出字节一致的 WOFF2，
+            # 否则每次运行都会因为 head.modified 变化而产生无意义的 commit。
+            # 注意：只改 head.modified 是不够的 —— fontTools 在 head 表 compile 时
+            # 会执行 `if ttFont.recalcTimestamp: self.modified = timestampNow()`，
+            # 把刚赋的值又覆盖成当前时间，于是每次产出的 WOFF2 字节都不同
+            # （压缩后大小会差几十字节），diff 永远不为空，CI 每次都会提交一个
+            # 「perf: 更新 Nebulove 字体子集」的空转 commit。
+            # 必须同时关掉 recalcTimestamp，这个固定才真正生效。
+            # 取 created 而不是 0：0 会被 fontTools 判定为异常小的时间戳并在
+            # stderr 打 warning（读回时还会被加上 Mac epoch 偏移）。
+            font["head"].modified = font["head"].created
 
-        font.flavor = "woff2"
-        font.save(tmp_woff2)
+            font.flavor = "woff2"
+            font.save(tmp_woff2)
 
         woff2_size = os.path.getsize(tmp_woff2)
         print(f"Subsetted WOFF2 size: {woff2_size} bytes ({woff2_size / 1024:.2f} KB)")
