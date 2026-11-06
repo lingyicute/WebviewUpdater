@@ -37,6 +37,7 @@ import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
@@ -221,17 +222,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Android 主版本号，如 "14" / "8.1.0" -> 8 */
+    /** Android 主版本号，如 "14" / "8.1.0" -> 8；预览版等非数字前缀按 SDK_INT 映射 */
     private static int androidMajorVersion() {
-        String release = Build.VERSION.RELEASE == null ? "" : Build.VERSION.RELEASE;
+        String release = Build.VERSION.RELEASE == null ? "" : Build.VERSION.RELEASE.trim();
         Matcher m = Pattern.compile("^(\\d+)").matcher(release);
         if (m.find()) {
             try {
-                return Integer.parseInt(m.group(1));
+                int major = Integer.parseInt(m.group(1));
+                if (major > 0) return major;
             } catch (NumberFormatException ignored) {
             }
         }
-        return Build.VERSION.SDK_INT;
+        int sdk = Build.VERSION.SDK_INT;
+        if (sdk >= 33) return sdk - 20; // API 33->13, 34->14, 35->15, 36->16
+        if (sdk >= 31) return 12;       // API 31/32->12
+        if (sdk >= 28) return sdk - 19; // API 28->9, 29->10, 30->11
+        return 8;                       // API 26/27->8
     }
 
     // ------------------------------------------------------------------ check update
@@ -275,8 +281,8 @@ public class MainActivity extends AppCompatActivity {
 
                 String body = readAll(conn.getInputStream()).trim();
                 // 期望格式: "versionCode数字[空格]apk下载链接"
-                String[] parts = body.split("\\s+", 2);
-                if (parts.length < 2) {
+                String[] parts = body.split("\\s+");
+                if (parts.length != 2) {
                     throw new IOException(getString(R.string.error_bad_response, abbreviate(body)));
                 }
                 final long ver;
@@ -373,6 +379,7 @@ public class MainActivity extends AppCompatActivity {
         // 避免 LinearProgressIndicator 在可见态下调用 setIndeterminate(true) 抛出 IllegalStateException
         ui.removeCallbacks(hideProgressRunnable);
         b.cardProgress.setVisibility(View.GONE);
+        b.progress.setProgressCompat(0, false);
         b.progress.setIndeterminate(true);
         b.tvProgress.setText(R.string.connecting);
         b.tvSpeed.setText("");
@@ -412,6 +419,10 @@ public class MainActivity extends AppCompatActivity {
                 ui.removeCallbacks(watchdog);
 
                 final long total = conn.getContentLengthLong();
+                ui.post(() -> {
+                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
+                    updateProgress(0, total, 0);
+                });
                 long downloaded = 0;
                 long lastTick = SystemClock.elapsedRealtime();
                 long lastBytes = 0;
@@ -449,7 +460,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 if (out.exists()) //noinspection ResultOfMethodCallIgnored
                     out.delete();
-                if (!tmp.renameTo(out)) throw new IOException("无法保存文件");
+                if (!tmp.renameTo(out)) throw new IOException(getString(R.string.error_save_file));
 
                 final long finalDownloaded = downloaded;
                 ui.post(() -> {
@@ -517,41 +528,49 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
             if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
             HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
-            conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(READ_TIMEOUT_MS);
-            conn.setInstanceFollowRedirects(false);
-            conn.setRequestProperty("User-Agent", userAgent());
-            conn.setRequestProperty("Cache-Control", "no-cache");
-            if (accept != null) {
-                conn.setRequestProperty("Accept", accept);
-            }
-            task.activeConnection = conn;
-            if (task.cancelled.get()) {
-                conn.disconnect();
-                throw new InterruptedIOException("cancelled");
-            }
-            conn.connect();
-
-            int code = conn.getResponseCode();
-            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
-                String location = conn.getHeaderField("Location");
-                conn.disconnect();
-                if (location == null) throw new IOException("重定向缺少 Location");
-                String next = new URL(new URL(current), location).toString();
-                if (!isHttpsUrl(next)) {
-                    throw new IOException(getString(R.string.error_not_https, abbreviate(next)));
+            boolean keepOpen = false;
+            try {
+                conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+                conn.setReadTimeout(READ_TIMEOUT_MS);
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("User-Agent", userAgent());
+                conn.setRequestProperty("Cache-Control", "no-cache");
+                if (accept != null) {
+                    conn.setRequestProperty("Accept", accept);
+                    conn.setRequestProperty("Accept-Encoding", "identity");
                 }
-                current = next;
-                continue;
+                task.activeConnection = conn;
+                if (task.cancelled.get()) {
+                    throw new InterruptedIOException("cancelled");
+                }
+                conn.connect();
+
+                int code = conn.getResponseCode();
+                if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                    String location = conn.getHeaderField("Location");
+                    if (location == null) {
+                        throw new IOException(getString(R.string.error_redirect_no_location));
+                    }
+                    String next = new URL(new URL(current), location).toString();
+                    if (!isHttpsUrl(next)) {
+                        throw new IOException(getString(R.string.error_not_https, abbreviate(next)));
+                    }
+                    current = next;
+                    continue;
+                }
+                if (code != HttpURLConnection.HTTP_OK) {
+                    throw new IOException(getString(R.string.error_http, code));
+                }
+                task.connected = true;
+                keepOpen = true;
+                return conn;
+            } finally {
+                if (!keepOpen) {
+                    conn.disconnect();
+                }
             }
-            if (code != HttpURLConnection.HTTP_OK) {
-                conn.disconnect();
-                throw new IOException(getString(R.string.error_http, code));
-            }
-            task.connected = true;
-            return conn;
         }
-        throw new IOException("重定向次数过多");
+        throw new IOException(getString(R.string.error_too_many_redirects));
     }
 
     private void cancelDownload() {
@@ -666,9 +685,27 @@ public class MainActivity extends AppCompatActivity {
         b.btnDownload.setEnabled(!value);
     }
 
-    /** 只接受 https:// 前缀（大小写不敏感）；拒绝 http://、//host/path 等一切非加密形式 */
+    /** 只接受合法且包含非空主机名的 https:// 地址；拒绝 http://、空白字符或畸形地址 */
     private static boolean isHttpsUrl(@NonNull String url) {
-        return url.regionMatches(true, 0, "https://", 0, "https://".length());
+        if (!url.regionMatches(true, 0, "https://", 0, "https://".length())) {
+            return false;
+        }
+        for (int i = 0; i < url.length(); i++) {
+            if (Character.isWhitespace(url.charAt(i))) {
+                return false;
+            }
+        }
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost();
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null || host.isEmpty()) {
+                return false;
+            }
+            new URL(url);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static boolean isConnectFailure(Exception e) {
