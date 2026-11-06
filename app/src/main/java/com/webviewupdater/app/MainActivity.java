@@ -89,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable hideProgressRunnable = this::hideProgressCard;
+    private final Object fileLock = new Object();
 
     @Nullable private RequestTask activeTask;
     @Nullable private AlertDialog activeDialog;
@@ -341,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
                 conn = openWithRedirects(BASE_URL + androidMajorVersion(), null, task);
                 ui.removeCallbacks(watchdog);
 
-                String body = readAll(conn.getInputStream()).trim();
+                String body = readAll(conn.getInputStream(), task).trim();
                 if (body.startsWith("\uFEFF")) {
                     body = body.substring(1).trim();
                 }
@@ -420,10 +421,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmDownload() {
         if (latestApkUrl == null || isFinishing() || isDestroyed()) return;
+        String curVerText = currentVersionCode >= 0
+                ? String.valueOf(currentVersionCode)
+                : getString(R.string.webview_not_found);
         showDialog(new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.dialog_update_title)
-                .setMessage(getString(R.string.dialog_update_message, latestVersionCode,
-                        Math.max(currentVersionCode, 0)))
+                .setMessage(getString(R.string.dialog_update_message, latestVersionCode, curVerText))
                 .setPositiveButton(R.string.btn_download, (d, w) -> startDownload())
                 .setNegativeButton(R.string.later, null));
     }
@@ -437,6 +440,8 @@ public class MainActivity extends AppCompatActivity {
 
         final RequestTask task = startNewTask();
         setBusy(true);
+        downloadedApk = null;
+        b.btnDownload.setText(R.string.btn_download);
 
         // 先移除可能尚未执行的延迟隐藏任务并确保卡片处于 GONE，
         // 避免 LinearProgressIndicator 在可见态下调用 setIndeterminate(true) 抛出 IllegalStateException
@@ -468,15 +473,21 @@ public class MainActivity extends AppCompatActivity {
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
 
         executor.execute(() -> {
-            if (task.cancelled.get()) return;
-            File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            if (dir == null) dir = new File(getFilesDir(), "Download");
-            if (!dir.exists()) //noinspection ResultOfMethodCallIgnored
-                dir.mkdirs();
-            cleanupOldApks(dir);
-            final File out = new File(dir, "webview_" + targetCode + ".apk");
-            final File tmp = new File(dir, "webview_" + targetCode + "_"
-                    + SystemClock.elapsedRealtimeNanos() + ".apk.part");
+            final File dir;
+            final File out;
+            final File tmp;
+            synchronized (fileLock) {
+                if (task.cancelled.get() || activeTask != task) return;
+                File d = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (d == null) d = new File(getFilesDir(), "Download");
+                if (!d.exists()) //noinspection ResultOfMethodCallIgnored
+                    d.mkdirs();
+                cleanupOldApks(d);
+                dir = d;
+                out = new File(dir, "webview_" + targetCode + ".apk");
+                tmp = new File(dir, "webview_" + targetCode + "_"
+                        + SystemClock.elapsedRealtimeNanos() + ".apk.part");
+            }
 
             HttpURLConnection conn = null;
             try {
@@ -501,6 +512,9 @@ public class MainActivity extends AppCompatActivity {
                         if (task.cancelled.get()) throw new InterruptedIOException("cancelled");
                         fos.write(buf, 0, n);
                         downloaded += n;
+                        if (total > 0 && downloaded > total) {
+                            throw new IOException(getString(R.string.error_download_incomplete));
+                        }
 
                         long now = SystemClock.elapsedRealtime();
                         long dt = now - lastTick;
@@ -523,9 +537,14 @@ public class MainActivity extends AppCompatActivity {
                 if (downloaded <= 0 || (total > 0 && downloaded != total) || !isValidApk(tmp)) {
                     throw new IOException(getString(R.string.error_download_incomplete));
                 }
-                if (out.exists()) //noinspection ResultOfMethodCallIgnored
-                    out.delete();
-                if (!tmp.renameTo(out)) throw new IOException(getString(R.string.error_save_file));
+                synchronized (fileLock) {
+                    if (task.cancelled.get() || activeTask != task) {
+                        throw new InterruptedIOException("cancelled");
+                    }
+                    if (out.exists()) //noinspection ResultOfMethodCallIgnored
+                        out.delete();
+                    if (!tmp.renameTo(out)) throw new IOException(getString(R.string.error_save_file));
+                }
 
                 final long finalDownloaded = downloaded;
                 ui.post(() -> {
@@ -536,8 +555,10 @@ public class MainActivity extends AppCompatActivity {
                 });
             } catch (Exception e) {
                 ui.removeCallbacks(watchdog);
-                //noinspection ResultOfMethodCallIgnored
-                tmp.delete();
+                synchronized (fileLock) {
+                    //noinspection ResultOfMethodCallIgnored
+                    tmp.delete();
+                }
                 final boolean wasCancelled = task.cancelled.get();
                 final boolean timedOut = task.connectTimedOut.get();
                 final boolean wasConnected = task.connected;
@@ -567,13 +588,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cleanupDownloadDirs() {
-        File extDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-        if (extDir != null && extDir.exists()) {
-            cleanupOldApks(extDir);
-        }
-        File intDir = new File(getFilesDir(), "Download");
-        if (intDir.exists()) {
-            cleanupOldApks(intDir);
+        synchronized (fileLock) {
+            if (activeTask != null) return;
+            File extDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (extDir != null && extDir.exists()) {
+                cleanupOldApks(extDir);
+            }
+            File intDir = new File(getFilesDir(), "Download");
+            if (intDir.exists()) {
+                cleanupOldApks(intDir);
+            }
         }
     }
 
@@ -658,6 +682,9 @@ public class MainActivity extends AppCompatActivity {
                 return conn;
             } finally {
                 if (!keepOpen) {
+                    if (task.activeConnection == conn) {
+                        task.activeConnection = null;
+                    }
                     conn.disconnect();
                 }
             }
@@ -710,7 +737,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void installApk(@NonNull File apk) {
         if (isFinishing() || isDestroyed()) return;
-        if (!apk.isFile() || apk.length() <= 0) {
+        if (!isValidApk(apk)) {
+            //noinspection ResultOfMethodCallIgnored
+            apk.delete();
             downloadedApk = null;
             b.btnDownload.setText(R.string.btn_download);
             confirmDownload();
@@ -734,10 +763,12 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     })
-                    .setNegativeButton(R.string.btn_cancel, null));
+                    .setNegativeButton(R.string.btn_cancel, (d, w) -> refreshUpdateStateAfterResume())
+                    .setOnCancelListener(d -> refreshUpdateStateAfterResume()));
             return;
         }
         try {
+            b.tvStatus.setText(R.string.status_download_done);
             Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, "application/vnd.android.package-archive");
@@ -819,7 +850,9 @@ public class MainActivity extends AppCompatActivity {
         try {
             URI uri = new URI(url);
             String host = uri.getHost();
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null || host.isEmpty()) {
+            int port = uri.getPort();
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null || host.isEmpty()
+                    || (port != -1 && (port < 1 || port > 65535))) {
                 return false;
             }
             new URL(url);
@@ -844,7 +877,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String userAgent() {
-        return "WebViewUpdater/1.0 (Android " + Build.VERSION.RELEASE + "; " + Build.MODEL + ")";
+        String raw = "WebViewUpdater/1.0 (Android " + Build.VERSION.RELEASE + "; " + Build.MODEL + ")";
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (c >= 0x20 && c < 0x7f) {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private static String describe(Exception e) {
@@ -859,14 +900,19 @@ public class MainActivity extends AppCompatActivity {
         return s.substring(0, end) + "…";
     }
 
-    private static String readAll(InputStream in) throws IOException {
+    private String readAll(InputStream in, @NonNull RequestTask task) throws IOException {
         StringBuilder sb = new StringBuilder();
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             char[] buf = new char[1024];
             int n;
             while ((n = r.read(buf)) != -1) {
+                if (task.cancelled.get()) {
+                    throw new InterruptedIOException("cancelled");
+                }
                 sb.append(buf, 0, n);
-                if (sb.length() > 64 * 1024) break;
+                if (sb.length() > 64 * 1024) {
+                    throw new IOException(getString(R.string.error_bad_response, abbreviate(sb.toString())));
+                }
             }
         }
         return sb.toString();
