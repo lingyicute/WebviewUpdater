@@ -17,6 +17,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
@@ -59,7 +60,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_REDIRECTS = 5;
     private static final long PROGRESS_INTERVAL_MS = 400;
 
-    private ActivityMainBinding b;
+    private static final String KEY_LATEST_VER = "latest_version_code";
+    private static final String KEY_LATEST_URL = "latest_apk_url";
+    private static final String KEY_DOWNLOADED_APK = "downloaded_apk_path";
 
     private static final class RequestTask {
         final AtomicBoolean cancelled = new AtomicBoolean(false);
@@ -81,11 +84,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private ActivityMainBinding b;
+
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable hideProgressRunnable = this::hideProgressCard;
 
     @Nullable private RequestTask activeTask;
+    @Nullable private AlertDialog activeDialog;
     private boolean busy = false;
 
     private long currentVersionCode = -1;
@@ -108,6 +114,18 @@ public class MainActivity extends AppCompatActivity {
         // Material You 动态取色（Android 12+ 自动生效，低版本回退到主题色）
         DynamicColors.applyToActivityIfAvailable(this);
         super.onCreate(savedInstanceState);
+
+        if (savedInstanceState != null) {
+            latestVersionCode = savedInstanceState.getLong(KEY_LATEST_VER, -1);
+            latestApkUrl = savedInstanceState.getString(KEY_LATEST_URL);
+            String apkPath = savedInstanceState.getString(KEY_DOWNLOADED_APK);
+            if (apkPath != null) {
+                File f = new File(apkPath);
+                if (f.exists()) {
+                    downloadedApk = f;
+                }
+            }
+        }
 
         b = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(b.getRoot());
@@ -132,6 +150,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putLong(KEY_LATEST_VER, latestVersionCode);
+        outState.putString(KEY_LATEST_URL, latestApkUrl);
+        if (downloadedApk != null && downloadedApk.exists()) {
+            outState.putString(KEY_DOWNLOADED_APK, downloadedApk.getAbsolutePath());
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         // 安装完成后返回，刷新当前 WebView 信息与更新状态
@@ -141,6 +169,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        dismissActiveDialog();
         super.onDestroy();
         cancelActiveTask();
         ui.removeCallbacksAndMessages(null);
@@ -179,7 +208,9 @@ public class MainActivity extends AppCompatActivity {
             currentVersionCode = -1;
             b.tvCurrentName.setText(R.string.webview_not_found);
             b.tvCurrentPkg.setText("");
+            b.tvCurrentPkg.setVisibility(View.GONE);
             b.tvCurrentVersion.setText("");
+            b.tvCurrentVersion.setVisibility(View.GONE);
             return;
         }
 
@@ -192,13 +223,16 @@ public class MainActivity extends AppCompatActivity {
                 : pi.packageName;
         b.tvCurrentName.setText(label);
         b.tvCurrentPkg.setText(pi.packageName);
+        b.tvCurrentPkg.setVisibility(View.VISIBLE);
         b.tvCurrentVersion.setText(getString(R.string.version_format,
                 pi.versionName == null ? "?" : pi.versionName, currentVersionCode));
+        b.tvCurrentVersion.setVisibility(View.VISIBLE);
     }
 
     /**
-     * 从系统安装器返回后同步界面状态：
-     * 若本机 WebView 已升级到 >= latestVersionCode，刷新提示文案、隐藏安装按钮并清理安装包。
+     * 从系统安装器返回或重建 Activity 后同步界面状态：
+     * 若本机 WebView 已升级到 >= latestVersionCode，刷新提示文案、隐藏安装按钮并清理安装包；
+     * 若仍待升级，同步卡片、按钮与状态文案。
      */
     private void refreshUpdateStateAfterResume() {
         if (busy) return;
@@ -208,7 +242,12 @@ public class MainActivity extends AppCompatActivity {
                 b.btnDownload.setText(R.string.btn_download);
             }
         }
-        if (latestVersionCode > 0 && currentVersionCode >= latestVersionCode) {
+        if (latestVersionCode <= 0) return;
+
+        b.cardLatest.setVisibility(View.VISIBLE);
+        b.tvLatestCode.setText(getString(R.string.latest_code_format, latestVersionCode));
+
+        if (currentVersionCode >= 0 && currentVersionCode >= latestVersionCode) {
             b.tvLatestHint.setText(currentVersionCode == latestVersionCode
                     ? R.string.latest_is_same
                     : R.string.latest_is_newer_local);
@@ -218,6 +257,21 @@ public class MainActivity extends AppCompatActivity {
                 //noinspection ResultOfMethodCallIgnored
                 downloadedApk.delete();
                 downloadedApk = null;
+            }
+        } else {
+            b.tvLatestHint.setText(R.string.latest_is_newer);
+            if (downloadedApk != null && downloadedApk.exists()) {
+                b.btnDownload.setText(R.string.btn_install);
+                b.btnDownload.setVisibility(View.VISIBLE);
+                b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
+            } else if (latestApkUrl != null) {
+                b.btnDownload.setText(R.string.btn_download);
+                b.btnDownload.setVisibility(View.VISIBLE);
+                CharSequence curStatus = b.tvStatus.getText();
+                if (curStatus.equals(getString(R.string.status_idle))
+                        || curStatus.equals(getString(R.string.status_download_done))) {
+                    b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
+                }
             }
         }
     }
@@ -356,13 +410,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmDownload() {
         if (latestApkUrl == null || isFinishing() || isDestroyed()) return;
-        new MaterialAlertDialogBuilder(this)
+        showDialog(new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.dialog_update_title)
                 .setMessage(getString(R.string.dialog_update_message, latestVersionCode,
                         Math.max(currentVersionCode, 0)))
                 .setPositiveButton(R.string.btn_download, (d, w) -> startDownload())
-                .setNegativeButton(R.string.later, null)
-                .show();
+                .setNegativeButton(R.string.later, null));
     }
 
     // ------------------------------------------------------------------ download
@@ -618,16 +671,24 @@ public class MainActivity extends AppCompatActivity {
     private void installApk(@NonNull File apk) {
         if (isFinishing() || isDestroyed()) return;
         if (!getPackageManager().canRequestPackageInstalls()) {
-            new MaterialAlertDialogBuilder(this)
+            showDialog(new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_install_perm_title)
                     .setMessage(R.string.dialog_install_perm_message)
                     .setPositiveButton(R.string.go_settings, (d, w) -> {
-                        Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                Uri.parse("package:" + getPackageName()));
-                        installPermissionLauncher.launch(i);
+                        try {
+                            Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:" + getPackageName()));
+                            installPermissionLauncher.launch(i);
+                        } catch (Exception e1) {
+                            try {
+                                installPermissionLauncher.launch(
+                                        new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES));
+                            } catch (Exception e2) {
+                                showError(e2);
+                            }
+                        }
                     })
-                    .setNegativeButton(R.string.btn_cancel, null)
-                    .show();
+                    .setNegativeButton(R.string.btn_cancel, null));
             return;
         }
         try {
@@ -658,25 +719,39 @@ public class MainActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ dialogs / ui helpers
 
+    private void showDialog(@NonNull MaterialAlertDialogBuilder builder) {
+        if (isFinishing() || isDestroyed()) return;
+        dismissActiveDialog();
+        activeDialog = builder.show();
+    }
+
+    private void dismissActiveDialog() {
+        if (activeDialog != null) {
+            try {
+                if (activeDialog.isShowing()) {
+                    activeDialog.dismiss();
+                }
+            } catch (Exception ignored) {
+            }
+            activeDialog = null;
+        }
+    }
+
     /** 连不上服务器时的引导 */
     private void showNetworkHelpDialog() {
-        if (isFinishing() || isDestroyed()) return;
-        new MaterialAlertDialogBuilder(this)
+        showDialog(new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.dialog_network_title)
                 .setMessage(R.string.dialog_network_message)
-                .setPositiveButton(R.string.ok, null)
-                .show();
+                .setPositiveButton(R.string.ok, null));
     }
 
     private void showError(Exception e) {
         String msg = describe(e);
         b.tvStatus.setText(getString(R.string.status_error, msg));
-        if (isFinishing() || isDestroyed()) return;
-        new MaterialAlertDialogBuilder(this)
+        showDialog(new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.dialog_error_title)
                 .setMessage(msg)
-                .setPositiveButton(R.string.ok, null)
-                .show();
+                .setPositiveButton(R.string.ok, null));
     }
 
     private void setBusy(boolean value) {
