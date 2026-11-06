@@ -18,6 +18,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: "build-apk"
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Assemble APK
