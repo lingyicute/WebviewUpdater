@@ -38,7 +38,7 @@
     <string name="status_error">出错了：%1$s</string>
 
     <string name="dialog_update_title">发现新版本</string>
-    <string name="dialog_update_message">服务器最新 versionCode：%1$d\n当前 versionCode：%2$d\n\n是否下载并安装新版本？</string>
+    <string name="dialog_update_message">服务器最新 versionCode：%1$d\n当前 versionCode：%2$s\n\n是否下载并安装新版本？</string>
 
     <string name="dialog_network_title">没能连上服务器</string>
     <string name="dialog_network_message">与服务器建立连接失败，本次操作已取消。\n\n请先试试切换网络：\n· Wi-Fi 换成移动数据（或反过来）\n· 换一个 Wi-Fi / 开一下飞行模式再关闭\n\n切换网络后重新点「检查更新」即可。如果换了网络仍然连不上，考虑开启 VPN 后重试。</string>
