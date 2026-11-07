@@ -72,6 +72,8 @@
       -webkit-font-smoothing: antialiased;
     }
     a { color: inherit; text-decoration: none; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .phone :focus-visible { outline-color: var(--m-primary); }
     code {
       font-family: "Nebulove", ui-monospace, SFMono-Regular, Menlo, monospace;
       background: var(--code-bg);
@@ -193,7 +195,7 @@
     .app-icon svg { width: 32px; height: 32px; }
     .app-head-text { margin-left: 16px; }
     .app-head-text .t { font-size: 24px; line-height: 32px; }
-    .app-head-text .s { margin-top: 2px; font-size: 14px; color: var(--m-on-surface-variant); }
+    .app-head-text .s { margin-top: 2px; font-size: 14px; color: var(--m-on-surface-variant); transition: color .35s; }
     .m-card {
       margin-top: 8px; padding: 20px; border-radius: 24px;
       background: var(--m-primary-container); color: var(--m-on-primary-container); transition: background .35s, color .35s;
@@ -202,7 +204,7 @@
     .m-card .title { margin-top: 6px; font-size: 24px; line-height: 32px; }
     .m-card .pkg { margin-top: 4px; font-size: 12px; opacity: .9; letter-spacing: .01em; }
     .m-card .ver { margin-top: 8px; font-size: 14px; }
-    .m-status { margin-top: 20px; text-align: center; font-size: 14px; color: var(--m-on-surface-variant); min-height: 22px; }
+    .m-status { margin-top: 20px; text-align: center; font-size: 14px; color: var(--m-on-surface-variant); min-height: 22px; transition: color .35s; }
     .m-btn {
       margin-top: 16px; height: 56px; width: 100%; border-radius: 999px; border: 0; cursor: pointer;
       font-family: inherit; font-size: 14px; font-weight: 500;
@@ -220,15 +222,15 @@
 
     /* 署名区块 */
     .credit { display: flex; flex-direction: column; align-items: flex-start; }
-    .credit .powered { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--m-outline); }
+    .credit .powered { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--m-outline); transition: color .35s; }
     .credit .who { margin-top: 6px; display: flex; align-items: center; }
-    .credit .who img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--m-outline-variant); }
-    .credit .who span { margin-left: 10px; font-size: 16px; font-weight: 500; color: var(--m-on-surface); }
+    .credit .who img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--m-outline-variant); transition: box-shadow .35s; }
+    .credit .who span { margin-left: 10px; font-size: 16px; font-weight: 500; color: var(--m-on-surface); transition: color .35s; }
     .credit .links { margin-top: 2px; margin-left: -8px; display: flex; align-items: center; gap: 4px; }
     .credit .links a {
       height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px 0 12px;
       border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--m-primary);
-      transition: background .2s;
+      transition: background .2s, color .35s;
     }
     .credit .links a:hover { background: var(--m-hover); }
     .credit .links a:active { background: var(--m-active); }
@@ -325,7 +327,7 @@
 <body>
 
   <!-- SVG 图标定义 -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
     <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
     <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
@@ -343,7 +345,7 @@
   <header class="nav">
     <div class="container">
       <a class="brand" href="#top">
-        <img src="./ic.png" alt="app-icon" />
+        <img src="./ic.png" alt="app-icon" width="32" height="32" decoding="async" />
         WebviewUpdater
       </a>
       <nav class="nav-links">
@@ -427,7 +429,7 @@
               <div class="credit">
                 <span class="powered">Powered By</span>
                 <div class="who">
-                  <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute 头像" />
+                  <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute 头像" width="36" height="36" loading="lazy" decoding="async" />
                   <span>lingyicute</span>
                 </div>
                 <div class="links">
@@ -549,7 +551,7 @@
     <section id="author">
       <div class="container">
         <div class="author reveal">
-          <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute" />
+          <img src="https://raw.githubusercontent.com/lingyicute/Me/main/static/img/logo.webp" alt="lingyicute" width="84" height="84" loading="lazy" decoding="async" />
           <div class="info">
             <div class="powered">Powered By</div>
             <h3>lingyicute</h3>
@@ -651,7 +653,8 @@
 
       /* ---- 入场动画 ---- */
       var reveals = document.querySelectorAll('.reveal');
-      if ('IntersectionObserver' in window) {
+      var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduceMotion && 'IntersectionObserver' in window) {
         var io = new IntersectionObserver(function (entries) {
           entries.forEach(function (en) {
             if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
