@@ -9,18 +9,27 @@ FALLBACK_URL = "https://cdn.jsdelivr.net/gh/lingyicute/Nebulove@main/Nebulove.wo
 INDEX_PATH = os.path.join(REPO_ROOT, "web", "index.html")
 # 下载超时（秒）：没有超时机制时，网络异常会让 CI 一直卡到 job 超时
 DOWNLOAD_TIMEOUT_SEC = 60
-# 匹配样式表里的 @font-face 块及 HTML / CSS / JS 注释
+# 匹配样式表里的 @font-face 块及 HTML / CSS / JS 注释（保留字符串字面量防止误删）
 FONT_FACE_RE = re.compile(r'@font-face\s*\{[^}]*\}', re.DOTALL)
 HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
 STYLE_TAG_RE = re.compile(r'(<style\b[^>]*>)(.*?)(</style>)', re.DOTALL | re.IGNORECASE)
-BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+CSS_TOKEN_RE = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|/\*.*?\*/', re.DOTALL)
 SCRIPT_TAG_RE = re.compile(r'(<script\b[^>]*>)(.*?)(</script>)', re.DOTALL | re.IGNORECASE)
-JS_COMMENT_RE = re.compile(r'/\*.*?\*/|(?:^|(?<=[\s,;{}()\[\]]))//[^\r\n]*', re.DOTALL | re.MULTILINE)
+JS_TOKEN_RE = re.compile(
+    r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`)|/\*.*?\*/|//[^\r\n]*',
+    re.DOTALL,
+)
 
 
 def download(url, dest):
     """带超时的下载到文件（urllib.request.urlretrieve 无超时参数），并校验 Content-Length 完整性"""
-    req = urllib.request.Request(url, headers={"User-Agent": "webviewupdater-font-subset/1.0"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "webviewupdater-font-subset/1.0",
+            "Accept-Encoding": "identity",
+        },
+    )
     with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT_SEC) as resp, open(dest, "wb") as out:
         expected_header = resp.headers.get("Content-Length")
         total_read = 0
@@ -50,9 +59,13 @@ def main():
     with open(INDEX_PATH, "r", encoding="utf-8") as f:
         html = f.read()
 
-    # 先确认页面里确实有 @font-face 可替换：否则下面的 re.sub 是空操作，
+    # 先确认 <style> 块里确实有 @font-face 可替换：否则下面的替换是空操作，
     # 却会输出「already up to date」，把「没找到替换点」误报成「已是最新」。
-    matches = FONT_FACE_RE.findall(html)
+    matches = [
+        m
+        for style_m in STYLE_TAG_RE.finditer(html)
+        for m in FONT_FACE_RE.findall(style_m.group(2))
+    ]
     if not matches:
         print("Error: no @font-face block found in web/index.html, nothing to replace.",
               file=sys.stderr)
@@ -62,14 +75,17 @@ def main():
               file=sys.stderr)
 
     # 1. Collect all characters needed (exclude old @font-face data URI, comments & unescape HTML entities)
-    html_without_font = FONT_FACE_RE.sub("", html)
-    html_without_comments = HTML_COMMENT_RE.sub("", html_without_font)
+    html_without_comments = HTML_COMMENT_RE.sub("", html)
     html_without_comments = STYLE_TAG_RE.sub(
-        lambda m: m.group(1) + BLOCK_COMMENT_RE.sub("", m.group(2)) + m.group(3),
+        lambda m: m.group(1)
+        + CSS_TOKEN_RE.sub(lambda tm: tm.group(1) or "", FONT_FACE_RE.sub("", m.group(2)))
+        + m.group(3),
         html_without_comments,
     )
     html_without_comments = SCRIPT_TAG_RE.sub(
-        lambda m: m.group(1) + JS_COMMENT_RE.sub("", m.group(2)) + m.group(3),
+        lambda m: m.group(1)
+        + JS_TOKEN_RE.sub(lambda tm: tm.group(1) or "", m.group(2))
+        + m.group(3),
         html_without_comments,
     )
     chars = set(html_lib.unescape(html_without_comments))
@@ -157,16 +173,34 @@ def main():
   font-display:swap;
 }}'''
 
-    # 用函数作替换：re.sub 的字符串替换式会对 `\1`、`\g<name>` 之类的引用求值，
-    # 把 font_css 当成模板；换成函数后原样写入，不受内容里的反斜杠影响。
-    new_html = FONT_FACE_RE.sub(lambda _m: font_css, html, count=1)
+    # 仅替换首个包含 @font-face 的 <style> 块中的首个 @font-face；
+    # 用函数作替换避免 re.sub 将替换串当成反斜杠模板求值。
+    replaced = False
+
+    def replace_in_style(m):
+        nonlocal replaced
+        if replaced or not FONT_FACE_RE.search(m.group(2)):
+            return m.group(0)
+        replaced = True
+        return m.group(1) + FONT_FACE_RE.sub(lambda _m: font_css, m.group(2), count=1) + m.group(3)
+
+    new_html = STYLE_TAG_RE.sub(replace_in_style, html)
 
     if new_html == html:
         print("web/index.html is already up to date. No changes made.")
         return
 
-    with open(INDEX_PATH, "w", encoding="utf-8", newline="\n") as f:
-        f.write(new_html)
+    tmp_html_fd, tmp_html_path = tempfile.mkstemp(
+        prefix=".index.html.", suffix=".tmp", dir=os.path.dirname(INDEX_PATH)
+    )
+    try:
+        with os.fdopen(tmp_html_fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(new_html)
+        os.replace(tmp_html_path, INDEX_PATH)
+    except Exception:
+        if os.path.exists(tmp_html_path):
+            os.remove(tmp_html_path)
+        raise
 
     print("web/index.html updated successfully!")
 
