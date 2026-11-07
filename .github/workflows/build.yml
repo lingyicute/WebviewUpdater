@@ -54,11 +54,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          shopt -s nullglob
+          APKS=(app/build/outputs/apk/release/*.apk)
+          if [ "${#APKS[@]}" -eq 0 ]; then
+            echo "Error: No release APK found." >&2
+            exit 1
+          fi
           TAG="nightly-${{ github.run_number }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" app/build/outputs/apk/release/*.apk --clobber
+            gh release upload "$TAG" "${APKS[@]}" --clobber
           else
-            gh release create "$TAG" app/build/outputs/apk/release/*.apk \
+            gh release create "$TAG" "${APKS[@]}" \
               --target "${{ github.sha }}" \
               --title "Nightly No.${{ github.run_number }}" \
               --notes "自动构建 No.${{ github.run_number }}"
