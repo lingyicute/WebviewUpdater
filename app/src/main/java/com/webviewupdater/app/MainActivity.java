@@ -72,8 +72,9 @@ public class MainActivity extends AppCompatActivity {
         @Nullable Runnable watchdog;
 
         void cancel() {
-            cancelled.set(true);
-            abortConnection();
+            if (cancelled.compareAndSet(false, true)) {
+                abortConnection();
+            }
         }
 
         void abortConnection() {
@@ -91,24 +92,28 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable hideProgressRunnable = this::hideProgressCard;
     private final Object fileLock = new Object();
 
-    @Nullable private RequestTask activeTask;
+    @Nullable private volatile RequestTask activeTask;
     @Nullable private AlertDialog activeDialog;
     private boolean busy = false;
 
     private long currentVersionCode = -1;
     private long latestVersionCode = -1;
     @Nullable private String latestApkUrl;
-    @Nullable private File downloadedApk;
+    @Nullable private volatile File downloadedApk;
 
     private final ActivityResultLauncher<Intent> installPermissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                loadCurrentWebViewInfo();
-                if (downloadedApk != null && downloadedApk.exists()
-                        && (latestVersionCode <= 0 || currentVersionCode < 0 || currentVersionCode < latestVersionCode)
-                        && getPackageManager().canRequestPackageInstalls()) {
-                    installApk(downloadedApk);
-                }
-            });
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result ->
+                    ui.post(() -> {
+                        if (isFinishing() || isDestroyed() || busy) return;
+                        loadCurrentWebViewInfo();
+                        refreshUpdateStateAfterResume();
+                        File apk = downloadedApk;
+                        if (apk != null && apk.exists()
+                                && (latestVersionCode <= 0 || currentVersionCode < 0 || currentVersionCode < latestVersionCode)
+                                && getPackageManager().canRequestPackageInstalls()) {
+                            installApk(apk);
+                        }
+                    }));
 
     // ------------------------------------------------------------------ lifecycle
 
@@ -139,11 +144,13 @@ public class MainActivity extends AppCompatActivity {
 
         b.btnCheck.setOnClickListener(v -> checkUpdate());
         b.btnDownload.setOnClickListener(v -> {
-            if (downloadedApk != null && downloadedApk.exists()) {
-                installApk(downloadedApk);
+            File apk = downloadedApk;
+            if (apk != null && apk.exists()) {
+                installApk(apk);
             } else {
                 downloadedApk = null;
                 b.btnDownload.setText(R.string.btn_download);
+                refreshUpdateStateAfterResume();
                 confirmDownload();
             }
         });
@@ -242,7 +249,10 @@ public class MainActivity extends AppCompatActivity {
      */
     private void refreshUpdateStateAfterResume() {
         if (busy) return;
-        if (downloadedApk != null && !downloadedApk.exists()) {
+        File curApk = downloadedApk;
+        if (curApk != null && !isValidApk(curApk)) {
+            //noinspection ResultOfMethodCallIgnored
+            curApk.delete();
             downloadedApk = null;
             if (b.btnDownload.getVisibility() == View.VISIBLE) {
                 b.btnDownload.setText(R.string.btn_download);
@@ -259,22 +269,24 @@ public class MainActivity extends AppCompatActivity {
                     : R.string.latest_is_newer_local);
             b.tvStatus.setText(R.string.status_up_to_date);
             b.btnDownload.setVisibility(View.GONE);
-            if (downloadedApk != null) {
-                //noinspection ResultOfMethodCallIgnored
-                downloadedApk.delete();
+            File apkToDelete = downloadedApk;
+            if (apkToDelete != null) {
                 downloadedApk = null;
+                //noinspection ResultOfMethodCallIgnored
+                apkToDelete.delete();
             }
             executor.execute(this::cleanupDownloadDirs);
         } else {
             b.tvLatestHint.setText(R.string.latest_is_newer);
-            if (downloadedApk != null && downloadedApk.exists()) {
+            File validApk = downloadedApk;
+            if (validApk != null && validApk.exists()) {
                 b.btnDownload.setText(R.string.btn_install);
                 b.btnDownload.setVisibility(View.VISIBLE);
                 b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
             } else if (latestApkUrl != null) {
                 b.btnDownload.setText(R.string.btn_download);
                 b.btnDownload.setVisibility(View.VISIBLE);
-                CharSequence curStatus = b.tvStatus.getText();
+                String curStatus = b.tvStatus.getText().toString();
                 if (curStatus.equals(getString(R.string.status_idle))
                         || curStatus.equals(getString(R.string.status_download_done))) {
                     b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
@@ -307,6 +319,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkUpdate() {
         if (busy) return;
+        dismissActiveDialog();
         final RequestTask task = startNewTask();
         setBusy(true);
 
@@ -339,7 +352,7 @@ public class MainActivity extends AppCompatActivity {
         executor.execute(() -> {
             HttpURLConnection conn = null;
             try {
-                conn = openWithRedirects(BASE_URL + androidMajorVersion(), null, task);
+                conn = openWithRedirects(BASE_URL + androidMajorVersion(), "text/plain, */*", task);
                 ui.removeCallbacks(watchdog);
 
                 String body = readAll(conn.getInputStream(), task).trim();
@@ -435,6 +448,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startDownload() {
         if (busy || latestApkUrl == null) return;
+        dismissActiveDialog();
         final String urlStr = latestApkUrl;
         final long targetCode = latestVersionCode;
 
@@ -444,9 +458,11 @@ public class MainActivity extends AppCompatActivity {
         b.btnDownload.setText(R.string.btn_download);
 
         // 先移除可能尚未执行的延迟隐藏任务并确保卡片处于 GONE，
-        // 避免 LinearProgressIndicator 在可见态下调用 setIndeterminate(true) 抛出 IllegalStateException
+        // 避免 LinearProgressIndicator 在可见态下调用 setIndeterminate(true) 抛出 IllegalStateException，
+        // 同时先退出不确定态再清零进度，防止上一次在不确定态中断后触发延迟切回确定态的回调
         ui.removeCallbacks(hideProgressRunnable);
         b.cardProgress.setVisibility(View.GONE);
+        b.progress.setIndeterminate(false);
         b.progress.setProgressCompat(0, false);
         b.progress.setIndeterminate(true);
         b.tvProgress.setText(R.string.connecting);
@@ -473,24 +489,26 @@ public class MainActivity extends AppCompatActivity {
         ui.postDelayed(watchdog, CONNECT_TIMEOUT_MS);
 
         executor.execute(() -> {
-            final File dir;
-            final File out;
-            final File tmp;
-            synchronized (fileLock) {
-                if (task.cancelled.get() || activeTask != task) return;
-                File d = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-                if (d == null) d = new File(getFilesDir(), "Download");
-                if (!d.exists()) //noinspection ResultOfMethodCallIgnored
-                    d.mkdirs();
-                cleanupOldApks(d);
-                dir = d;
-                out = new File(dir, "webview_" + targetCode + ".apk");
-                tmp = new File(dir, "webview_" + targetCode + "_"
-                        + SystemClock.elapsedRealtimeNanos() + ".apk.part");
-            }
-
+            File tmp = null;
             HttpURLConnection conn = null;
             try {
+                final File out;
+                synchronized (fileLock) {
+                    if (task.cancelled.get() || activeTask != task) {
+                        throw new InterruptedIOException("cancelled");
+                    }
+                    File d = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                    if (d == null || (!d.exists() && !d.mkdirs()) || !d.canWrite()) {
+                        d = new File(getFilesDir(), "Download");
+                        if (!d.exists()) //noinspection ResultOfMethodCallIgnored
+                            d.mkdirs();
+                    }
+                    cleanupAllDownloadDirsLocked();
+                    out = new File(d, "webview_" + targetCode + ".apk");
+                    tmp = new File(d, "webview_" + targetCode + "_"
+                            + SystemClock.elapsedRealtimeNanos() + ".apk.part");
+                }
+
                 conn = openWithRedirects(urlStr, "application/vnd.android.package-archive, */*", task);
                 ui.removeCallbacks(watchdog);
 
@@ -547,17 +565,20 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 final long finalDownloaded = downloaded;
+                final File finalOut = out;
                 ui.post(() -> {
                     if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
                     activeTask = null;
                     updateProgress(finalDownloaded, total > 0 ? total : finalDownloaded, 0);
-                    onDownloadFinished(out);
+                    onDownloadFinished(finalOut);
                 });
             } catch (Exception e) {
                 ui.removeCallbacks(watchdog);
-                synchronized (fileLock) {
-                    //noinspection ResultOfMethodCallIgnored
-                    tmp.delete();
+                if (tmp != null) {
+                    synchronized (fileLock) {
+                        //noinspection ResultOfMethodCallIgnored
+                        tmp.delete();
+                    }
                 }
                 final boolean wasCancelled = task.cancelled.get();
                 final boolean timedOut = task.connectTimedOut.get();
@@ -589,15 +610,19 @@ public class MainActivity extends AppCompatActivity {
 
     private void cleanupDownloadDirs() {
         synchronized (fileLock) {
-            if (activeTask != null) return;
-            File extDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            if (extDir != null && extDir.exists()) {
-                cleanupOldApks(extDir);
-            }
-            File intDir = new File(getFilesDir(), "Download");
-            if (intDir.exists()) {
-                cleanupOldApks(intDir);
-            }
+            if (activeTask != null || downloadedApk != null) return;
+            cleanupAllDownloadDirsLocked();
+        }
+    }
+
+    private void cleanupAllDownloadDirsLocked() {
+        File extDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (extDir != null && extDir.exists()) {
+            cleanupOldApks(extDir);
+        }
+        File intDir = new File(getFilesDir(), "Download");
+        if (intDir.exists()) {
+            cleanupOldApks(intDir);
         }
     }
 
@@ -622,7 +647,8 @@ public class MainActivity extends AppCompatActivity {
         }
         try {
             PackageInfo info = getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
-            return info != null && info.packageName != null && !info.packageName.isEmpty();
+            return info != null && info.applicationInfo != null
+                    && info.packageName != null && !info.packageName.isEmpty();
         } catch (Throwable ignored) {
             return false;
         }
@@ -703,9 +729,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateProgress(long downloaded, long total, double bytesPerSec) {
         if (total > 0) {
-            if (b.progress.isIndeterminate()) b.progress.setIndeterminate(false);
             int pct = (int) Math.min(100, downloaded * 100 / total);
-            b.progress.setProgressCompat(pct, true);
+            if (b.progress.isIndeterminate()) {
+                b.progress.setIndeterminate(false);
+                b.progress.setProgressCompat(pct, false);
+            } else {
+                b.progress.setProgressCompat(pct, true);
+            }
             b.tvProgress.setText(getString(R.string.progress_format,
                     formatBytes(downloaded), formatBytes(total), pct));
         } else {
@@ -742,6 +772,7 @@ public class MainActivity extends AppCompatActivity {
             apk.delete();
             downloadedApk = null;
             b.btnDownload.setText(R.string.btn_download);
+            refreshUpdateStateAfterResume();
             confirmDownload();
             return;
         }
@@ -837,13 +868,15 @@ public class MainActivity extends AppCompatActivity {
         b.btnDownload.setEnabled(!value);
     }
 
-    /** 只接受合法且包含非空主机名的 https:// 地址；拒绝 http://、空白字符或畸形地址 */
+    /** 只接受合法且包含非空主机名的 https:// 地址；拒绝 http://、空白/控制字符、凭据信息或畸形地址 */
     private static boolean isHttpsUrl(@NonNull String url) {
         if (!url.regionMatches(true, 0, "https://", 0, "https://".length())) {
             return false;
         }
         for (int i = 0; i < url.length(); i++) {
-            if (Character.isWhitespace(url.charAt(i))) {
+            char c = url.charAt(i);
+            if (c <= 0x20 || c == 0x7f || Character.isWhitespace(c)
+                    || Character.isSpaceChar(c) || Character.isISOControl(c)) {
                 return false;
             }
         }
@@ -851,7 +884,9 @@ public class MainActivity extends AppCompatActivity {
             URI uri = new URI(url);
             String host = uri.getHost();
             int port = uri.getPort();
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null || host.isEmpty()
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                    || uri.getRawUserInfo() != null
+                    || host == null || host.isEmpty()
                     || (port != -1 && (port < 1 || port > 65535))) {
                 return false;
             }
