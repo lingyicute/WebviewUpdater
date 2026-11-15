@@ -314,11 +314,11 @@
     footer a:hover { text-decoration: underline; }
 
     /* 入场动画 */
-    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
-    .reveal.in { opacity: 1; transform: none; }
+    .reveal { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s ease; }
+    .reveal.reveal-pending { opacity: 0; transform: translateY(18px); }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      .reveal { opacity: 1; transform: none; transition: none; }
+      .reveal, .reveal.reveal-pending { opacity: 1; transform: none; transition: none; }
       .card:hover { transform: none; }
       .m-btn.spinning svg { animation: none; }
     }
@@ -655,14 +655,24 @@
       var reveals = document.querySelectorAll('.reveal');
       var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!reduceMotion && 'IntersectionObserver' in window) {
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (en) {
-            if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+        var io;
+        try {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+              if (en.isIntersecting) {
+                en.target.classList.remove('reveal-pending');
+                io.unobserve(en.target);
+              }
+            });
+          }, { threshold: 0 });
+          reveals.forEach(function (el) {
+            io.observe(el);
+            el.classList.add('reveal-pending');
           });
-        }, { threshold: 0.12 });
-        reveals.forEach(function (el) { io.observe(el); });
-      } else {
-        reveals.forEach(function (el) { el.classList.add('in'); });
+        } catch (e) {
+          reveals.forEach(function (el) { el.classList.remove('reveal-pending'); });
+          if (io) io.disconnect();
+        }
       }
 
       /* ---- 页脚年份 ---- */
