@@ -42,9 +42,12 @@ jobs:
           python scripts/subset_font.py
 
       - name: Commit and push changes as user
+        env:
+          COMMIT_AUTHOR_NAME: ${{ github.actor }}
+          COMMIT_AUTHOR_EMAIL: ${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.actor) }}
         run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.actor) }}"
+          git config user.name "$COMMIT_AUTHOR_NAME"
+          git config user.email "$COMMIT_AUTHOR_EMAIL"
           git fetch origin main
           if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
             git reset --hard origin/main
