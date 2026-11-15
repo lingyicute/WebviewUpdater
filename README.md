@@ -48,6 +48,22 @@
 > [!tip]
 > Release 构建默认使用 debug 密钥签名，便于直接安装测试。请在 `app/build.gradle` 中配置自己的 signingConfig。
 
+## 回归测试
+
+仅需 Python 3.11+、Node.js 22+ 和 Git，无需安装 Python / npm 依赖或访问网络：
+
+```sh
+python3 -m unittest discover -s tests -v
+node --test tests/*.test.cjs
+```
+
+测试覆盖字体替换范围与原子写回、工作流提交身份的安全传递、Android 资源配置，
+以及网页入场动画和主题状态。字体测试使用确定性替身，不下载字体；网页测试使用
+轻量 DOM 替身，不代替真实浏览器兼容性测试。推送和 Pull Request 会自动运行这些测试。
+
+Android 编译与静态检查另行执行 `gradle assembleRelease lintRelease --no-daemon`。
+下载、安装权限返回及 Activity 重建仍需在 Android 设备或模拟器上验证。
+
 ## 说明
 
 - 「Android 版本数字」取自 `Build.VERSION.RELEASE` 的主版本（如 `14`、`8.1.0 -> 8`）。
