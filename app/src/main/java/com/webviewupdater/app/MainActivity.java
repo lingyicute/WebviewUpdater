@@ -520,10 +520,11 @@ public class MainActivity extends AppCompatActivity {
                         throw new InterruptedIOException("cancelled");
                     }
                     File d = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-                    if (d == null || (!d.exists() && !d.mkdirs()) || !d.canWrite()) {
+                    if (d == null || (!d.exists() && !d.mkdirs()) || !d.isDirectory() || !d.canWrite()) {
                         d = new File(getFilesDir(), "Download");
-                        if (!d.exists()) //noinspection ResultOfMethodCallIgnored
-                            d.mkdirs();
+                        if ((!d.exists() && !d.mkdirs()) || !d.isDirectory() || !d.canWrite()) {
+                            throw new IOException(getString(R.string.error_save_file));
+                        }
                     }
                     cleanupAllDownloadDirsLocked();
                     out = new File(d, "webview_" + targetCode + ".apk");
