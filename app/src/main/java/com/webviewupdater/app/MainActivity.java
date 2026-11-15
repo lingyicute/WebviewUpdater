@@ -80,7 +80,12 @@ public class MainActivity extends AppCompatActivity {
         void abortConnection() {
             final HttpURLConnection c = activeConnection;
             if (c != null) {
-                new Thread(c::disconnect, "abort-conn").start();
+                new Thread(() -> {
+                    try {
+                        c.disconnect();
+                    } catch (Throwable ignored) {
+                    }
+                }, "abort-conn").start();
             }
         }
     }
