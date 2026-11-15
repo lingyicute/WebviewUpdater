@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """子集化 Nebulove 字体并内嵌进 web/index.html"""
 import re, base64, urllib.request, os, sys, tempfile, html as html_lib
+from html.parser import HTMLParser
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT_URL = "https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf"
@@ -9,16 +10,90 @@ FALLBACK_URL = "https://cdn.jsdelivr.net/gh/lingyicute/Nebulove@main/Nebulove.wo
 INDEX_PATH = os.path.join(REPO_ROOT, "web", "index.html")
 # 下载超时（秒）：没有超时机制时，网络异常会让 CI 一直卡到 job 超时
 DOWNLOAD_TIMEOUT_SEC = 60
-# 匹配样式表里的 @font-face 块及 HTML / CSS / JS 注释（保留字符串字面量防止误删）
-FONT_FACE_RE = re.compile(r'@font-face\s*\{[^}]*\}', re.DOTALL)
-HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
-STYLE_TAG_RE = re.compile(r'(<style\b[^>]*>)(.*?)(</style>)', re.DOTALL | re.IGNORECASE)
+# 字符串 / 注释先整体识别，不能在字面量内寻找 @font-face 或右花括号。
+FONT_FACE_START_RE = re.compile(r'@font-face\s*\{', re.IGNORECASE)
+HTML_COMMENT_RE = re.compile(r'<!--.*?--\s*>', re.DOTALL)
 CSS_TOKEN_RE = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|/\*.*?\*/', re.DOTALL)
-SCRIPT_TAG_RE = re.compile(r'(<script\b[^>]*>)(.*?)(</script>)', re.DOTALL | re.IGNORECASE)
+CSS_OPAQUE_RE = re.compile(r"""
+    \burl\((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^"'\\)])*\)
+    | "(?:\\.|[^"\\])*(?:"|\Z)
+    | '(?:\\.|[^'\\])*(?:'|\Z)
+    | /\*.*?(?:\*/|\Z)
+    | \\(?:[0-9a-f]{1,6}[ \t\r\n\f]?|.)
+""", re.DOTALL | re.IGNORECASE | re.VERBOSE)
 JS_TOKEN_RE = re.compile(
     r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`)|/\*.*?\*/|//[^\r\n]*',
     re.DOTALL,
 )
+
+
+class HtmlSource(HTMLParser):
+    """记录原文偏移，不重新序列化 HTML；脚本字面量与注释中的标签不参与匹配。"""
+
+    def __init__(self, source):
+        super().__init__(convert_charrefs=False)
+        self.source = source
+        self.line_starts = [0] + [m.end() for m in re.finditer('\n', source)]
+        self.blocks = []
+        self.comments = []
+        self.raw_block = None
+        self.feed(source)
+        self.close()
+
+    def source_offset(self):
+        line, column = self.getpos()
+        return self.line_starts[line - 1] + column
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('style', 'script'):
+            self.raw_block = (tag, self.source_offset() + len(self.get_starttag_text()))
+
+    def handle_endtag(self, tag):
+        if self.raw_block is not None and self.raw_block[0] == tag:
+            self.blocks.append((*self.raw_block, self.source_offset()))
+            self.raw_block = None
+
+    def handle_comment(self, data):
+        match = HTML_COMMENT_RE.match(self.source, self.source_offset())
+        if match:
+            self.comments.append(match.span())
+
+
+def font_face_spans(source):
+    """返回完整规则的原文范围；屏蔽字符串、注释、URL 和转义后配对括号。"""
+    spans = []
+    for tag, start, end in HtmlSource(source).blocks:
+        if tag != 'style':
+            continue
+        css = CSS_OPAQUE_RE.sub(lambda m: ' ' * len(m.group()), source[start:end])
+        previous_end = 0
+        for match in FONT_FACE_START_RE.finditer(css):
+            if match.start() < previous_end:
+                continue
+            depth = 1
+            for brace in re.finditer(r'[{}]', css[match.end():]):
+                depth += 1 if brace.group() == '{' else -1
+                if depth == 0:
+                    previous_end = match.end() + brace.end()
+                    spans.append((start + match.start(), start + previous_end))
+                    break
+    return spans
+
+
+def replace_spans(source, replacements):
+    for start, end, value in sorted(replacements, reverse=True):
+        source = source[:start] + value + source[end:]
+    return source
+
+
+def text_for_subset(source, font_spans):
+    source = replace_spans(source, [(start, end, '') for start, end in font_spans])
+    parsed = HtmlSource(source)
+    replacements = [(start, end, '') for start, end in parsed.comments]
+    for tag, start, end in parsed.blocks:
+        tokens = CSS_TOKEN_RE if tag == 'style' else JS_TOKEN_RE
+        replacements.append((start, end, tokens.sub(lambda m: m.group(1) or '', source[start:end])))
+    return html_lib.unescape(replace_spans(source, replacements))
 
 
 def download(url, dest):
@@ -61,11 +136,7 @@ def main():
 
     # 先确认 <style> 块里确实有 @font-face 可替换：否则下面的替换是空操作，
     # 却会输出「already up to date」，把「没找到替换点」误报成「已是最新」。
-    matches = [
-        m
-        for style_m in STYLE_TAG_RE.finditer(html)
-        for m in FONT_FACE_RE.findall(style_m.group(2))
-    ]
+    matches = font_face_spans(html)
     if not matches:
         print("Error: no @font-face block found in web/index.html, nothing to replace.",
               file=sys.stderr)
@@ -75,20 +146,7 @@ def main():
               file=sys.stderr)
 
     # 1. Collect all characters needed (exclude old @font-face data URI, comments & unescape HTML entities)
-    html_without_comments = HTML_COMMENT_RE.sub("", html)
-    html_without_comments = STYLE_TAG_RE.sub(
-        lambda m: m.group(1)
-        + CSS_TOKEN_RE.sub(lambda tm: tm.group(1) or "", FONT_FACE_RE.sub("", m.group(2)))
-        + m.group(3),
-        html_without_comments,
-    )
-    html_without_comments = SCRIPT_TAG_RE.sub(
-        lambda m: m.group(1)
-        + JS_TOKEN_RE.sub(lambda tm: tm.group(1) or "", m.group(2))
-        + m.group(3),
-        html_without_comments,
-    )
-    chars = set(html_lib.unescape(html_without_comments))
+    chars = set(text_for_subset(html, matches))
     # Ensure full ASCII printable set (32 to 126)
     for c in range(32, 127):
         chars.add(chr(c))
@@ -173,18 +231,9 @@ def main():
   font-display:swap;
 }}'''
 
-    # 仅替换首个包含 @font-face 的 <style> 块中的首个 @font-face；
-    # 用函数作替换避免 re.sub 将替换串当成反斜杠模板求值。
-    replaced = False
-
-    def replace_in_style(m):
-        nonlocal replaced
-        if replaced or not FONT_FACE_RE.search(m.group(2)):
-            return m.group(0)
-        replaced = True
-        return m.group(1) + FONT_FACE_RE.sub(lambda _m: font_css, m.group(2), count=1) + m.group(3)
-
-    new_html = STYLE_TAG_RE.sub(replace_in_style, html)
+    # 仅替换首个真实规则，其他字节（包括示例、注释及脚本）保持不变。
+    start, end = matches[0]
+    new_html = html[:start] + font_css + html[end:]
 
     if new_html == html:
         print("web/index.html is already up to date. No changes made.")
