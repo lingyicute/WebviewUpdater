@@ -161,8 +161,11 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 downloadedApk = null;
                 b.btnDownload.setText(R.string.btn_download);
+                loadCurrentWebViewInfo();
                 refreshUpdateStateAfterResume();
-                confirmDownload();
+                if (needsUpdate()) {
+                    confirmDownload();
+                }
             }
         });
         b.btnCancel.setOnClickListener(v -> cancelDownload());
@@ -224,6 +227,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean needsUpdate() {
+        return latestVersionCode > 0 && latestApkUrl != null
+                && (currentVersionCode < 0 || currentVersionCode < latestVersionCode);
+    }
+
     // ------------------------------------------------------------------ current WebView
 
     private void loadCurrentWebViewInfo() {
@@ -282,6 +290,7 @@ public class MainActivity extends AppCompatActivity {
         b.tvLatestCode.setText(getString(R.string.latest_code_format, latestVersionCode));
 
         if (currentVersionCode >= 0 && currentVersionCode >= latestVersionCode) {
+            dismissActiveDialog();
             b.tvLatestHint.setText(currentVersionCode == latestVersionCode
                     ? R.string.latest_is_same
                     : R.string.latest_is_newer_local);
@@ -842,12 +851,14 @@ public class MainActivity extends AppCompatActivity {
     private void installApk(@NonNull File apk) {
         if (isFinishing() || isDestroyed()) return;
         if (!isValidApk(apk)) {
-            //noinspection ResultOfMethodCallIgnored
-            apk.delete();
             downloadedApk = null;
+            deleteStaleApkAsync(apk);
             b.btnDownload.setText(R.string.btn_download);
+            loadCurrentWebViewInfo();
             refreshUpdateStateAfterResume();
-            confirmDownload();
+            if (needsUpdate()) {
+                confirmDownload();
+            }
             return;
         }
         if (!getPackageManager().canRequestPackageInstalls()) {
