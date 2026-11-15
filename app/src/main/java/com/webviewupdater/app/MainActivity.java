@@ -20,6 +20,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
+import androidx.lifecycle.Lifecycle;
 
 import com.google.android.material.color.DynamicColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -105,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private long latestVersionCode = -1;
     @Nullable private String latestApkUrl;
     @Nullable private volatile File downloadedApk;
+    private boolean pendingInstallOnResume = false;
 
     private final ActivityResultLauncher<Intent> installPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result ->
@@ -116,7 +118,11 @@ public class MainActivity extends AppCompatActivity {
                         if (apk != null && apk.exists()
                                 && (latestVersionCode <= 0 || currentVersionCode < 0 || currentVersionCode < latestVersionCode)
                                 && getPackageManager().canRequestPackageInstalls()) {
-                            installApk(apk);
+                            if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+                                installApk(apk);
+                            } else {
+                                pendingInstallOnResume = true;
+                            }
                         }
                     }));
 
@@ -180,6 +186,14 @@ public class MainActivity extends AppCompatActivity {
         // 安装完成后返回，刷新当前 WebView 信息与更新状态
         loadCurrentWebViewInfo();
         refreshUpdateStateAfterResume();
+        if (pendingInstallOnResume) {
+            pendingInstallOnResume = false;
+            File apk = downloadedApk;
+            if (!busy && apk != null && apk.exists()
+                    && (latestVersionCode <= 0 || currentVersionCode < 0 || currentVersionCode < latestVersionCode)) {
+                installApk(apk);
+            }
+        }
     }
 
     @Override
@@ -735,6 +749,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void cancelDownload() {
         if (activeTask == null) return;
+        pendingInstallOnResume = false;
         cancelActiveTask();
         hideProgressCard();
         setBusy(false);
@@ -765,11 +780,20 @@ public class MainActivity extends AppCompatActivity {
         downloadedApk = apk;
         setBusy(false);
         b.btnCancel.setEnabled(false);
-        b.tvStatus.setText(R.string.status_download_done);
         b.btnDownload.setText(R.string.btn_install);
         b.btnDownload.setVisibility(View.VISIBLE);
         ui.postDelayed(hideProgressRunnable, 600);
-        installApk(apk);
+        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            b.tvStatus.setText(R.string.status_download_done);
+            installApk(apk);
+        } else {
+            pendingInstallOnResume = true;
+            if (latestVersionCode > 0) {
+                b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
+            } else {
+                b.tvStatus.setText(R.string.status_download_done);
+            }
+        }
     }
 
     private void hideProgressCard() {
