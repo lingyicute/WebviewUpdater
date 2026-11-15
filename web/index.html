@@ -662,24 +662,35 @@
 
       /* ---- 入场动画 ---- */
       var reveals = document.querySelectorAll('.reveal');
-      var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var rmq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+      var reduceMotion = !!(rmq && rmq.matches);
       if (!reduceMotion && 'IntersectionObserver' in window) {
         var io;
         try {
           io = new IntersectionObserver(function (entries) {
-            entries.forEach(function (en) {
-              if (en.isIntersecting) {
-                en.target.classList.remove('reveal-pending');
-                io.unobserve(en.target);
+            for (var k = 0; k < entries.length; k++) {
+              if (entries[k].isIntersecting) {
+                entries[k].target.classList.remove('reveal-pending');
+                io.unobserve(entries[k].target);
               }
-            });
+            }
           }, { threshold: 0 });
-          reveals.forEach(function (el) {
-            io.observe(el);
-            el.classList.add('reveal-pending');
-          });
+          for (var j = 0; j < reveals.length; j++) {
+            io.observe(reveals[j]);
+            reveals[j].classList.add('reveal-pending');
+          }
+          var onMotionChange = function (e) {
+            if (e.matches) {
+              for (var m = 0; m < reveals.length; m++) reveals[m].classList.remove('reveal-pending');
+              if (io) io.disconnect();
+            }
+          };
+          if (rmq) {
+            if (rmq.addEventListener) rmq.addEventListener('change', onMotionChange);
+            else if (rmq.addListener) rmq.addListener(onMotionChange);
+          }
         } catch (e) {
-          reveals.forEach(function (el) { el.classList.remove('reveal-pending'); });
+          for (var n = 0; n < reveals.length; n++) reveals[n].classList.remove('reveal-pending');
           if (io) io.disconnect();
         }
       }

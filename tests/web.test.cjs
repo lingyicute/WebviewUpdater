@@ -57,7 +57,7 @@ function page(options = {}) {
     setTimeout: callback => timers.push(callback),
     setInterval: () => 1,
     window: {
-      matchMedia: query => query.includes('reduced-motion') ? { matches: !!options.reducedMotion } : scheme,
+      matchMedia: query => options.nullMatchMedia ? null : (query.includes('reduced-motion') ? { matches: !!options.reducedMotion } : scheme),
     },
   };
   if (options.observer !== false) {
@@ -170,4 +170,9 @@ test('manual theme survives scheme changes when storage is blocked', () => {
   view.buttons[1].click();
   view.changeScheme(false);
   assert.ok(view.ids.phone.classList.contains('dark'));
+});
+
+test('null matchMedia return value does not abort page initialization', () => {
+  const view = page({ nullMatchMedia: true });
+  assert.notEqual(view.ids.year.textContent, '');
 });
