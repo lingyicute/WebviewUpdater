@@ -748,9 +748,9 @@ public class MainActivity extends AppCompatActivity {
                 conn.setInstanceFollowRedirects(false);
                 conn.setRequestProperty("User-Agent", userAgent());
                 conn.setRequestProperty("Cache-Control", "no-cache");
+                conn.setRequestProperty("Accept-Encoding", "identity");
                 if (accept != null) {
                     conn.setRequestProperty("Accept", accept);
-                    conn.setRequestProperty("Accept-Encoding", "identity");
                 }
                 task.activeConnection = conn;
                 if (task.cancelled.get()) {
@@ -767,7 +767,13 @@ public class MainActivity extends AppCompatActivity {
                     if (location == null || location.trim().isEmpty()) {
                         throw new IOException(getString(R.string.error_redirect_no_location));
                     }
-                    String next = new URL(new URL(current), location.trim()).toString();
+                    String trimmed = location.trim();
+                    final String next;
+                    try {
+                        next = new URL(new URL(current), trimmed).toString();
+                    } catch (IOException e) {
+                        throw new IOException(getString(R.string.error_not_https, abbreviate(trimmed)), e);
+                    }
                     if (!isHttpsUrl(next)) {
                         throw new IOException(getString(R.string.error_not_https, abbreviate(next)));
                     }
