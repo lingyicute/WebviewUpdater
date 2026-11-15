@@ -11,8 +11,10 @@ on:
       - "bg.jpg"
       - "icon_512.png"
       - ".gitignore"
+      - "tests/**"
       - ".github/workflows/static.yml"
       - ".github/workflows/font-subset.yml"
+      - ".github/workflows/test.yml"
   workflow_dispatch:
 
 permissions:
@@ -60,6 +62,12 @@ jobs:
             echo "Error: No release APK found." >&2
             exit 1
           fi
+          for apk in "${APKS[@]}"; do
+            if [ ! -s "$apk" ]; then
+              echo "Error: Release APK is empty: $apk" >&2
+              exit 1
+            fi
+          done
           TAG="nightly-${{ github.run_number }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${APKS[@]}" --clobber

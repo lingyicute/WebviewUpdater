@@ -19,8 +19,10 @@
 ├── .github/workflows/
 │   ├── build.yml                      # GitHub Actions：构建 APK 并自动发布 Nightly Release
 │   ├── font-subset.yml                # GitHub Actions：子集化 Nebulove 字体并内嵌到网页
-│   └── static.yml                     # GitHub Actions：部署静态展示页到 GitHub Pages
+│   ├── static.yml                     # GitHub Actions：部署静态展示页到 GitHub Pages
+│   └── test.yml                       # GitHub Actions：运行离线回归测试
 ├── scripts/subset_font.py             # 网页字体子集化脚本
+├── tests/                             # Python、Android 资源与网页离线回归测试
 ├── web/                               # 项目展示网页（GitHub Pages）
 ├── build.gradle / settings.gradle / gradle.properties
 └── app/
