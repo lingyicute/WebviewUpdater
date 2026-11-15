@@ -98,7 +98,9 @@ def text_for_subset(source, font_spans):
 
 
 def download(url, dest):
-    """带超时的下载到文件（urllib.request.urlretrieve 无超时参数），并校验 Content-Length 完整性"""
+    """带超时的下载到文件（urllib.request.urlretrieve 无超时参数），并校验状态码、HTTPS 与 Content-Length 完整性"""
+    if not url.lower().startswith("https://"):
+        raise ValueError(f"Non-HTTPS font URL rejected: {url}")
     req = urllib.request.Request(
         url,
         headers={
@@ -107,6 +109,12 @@ def download(url, dest):
         },
     )
     with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT_SEC) as resp, open(dest, "wb") as out:
+        status = getattr(resp, "status", None)
+        if status is not None and status != 200:
+            raise IOError(f"Unexpected HTTP status {status}")
+        final_url = resp.geturl()
+        if not final_url.lower().startswith("https://"):
+            raise IOError(f"Redirected to non-HTTPS URL: {final_url}")
         expected_header = resp.headers.get("Content-Length")
         total_read = 0
         while True:
@@ -120,9 +128,9 @@ def download(url, dest):
     if expected_header is not None:
         try:
             expected_size = int(expected_header.strip())
-        except ValueError:
-            expected_size = -1
-        if expected_size > 0 and total_read != expected_size:
+        except ValueError as exc:
+            raise IOError(f"Invalid Content-Length header: {expected_header!r}") from exc
+        if expected_size < 0 or total_read != expected_size:
             raise IOError(f"Incomplete font download: got {total_read} bytes, expected {expected_size}")
 
 
