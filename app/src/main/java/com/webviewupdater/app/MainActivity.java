@@ -251,9 +251,8 @@ public class MainActivity extends AppCompatActivity {
         if (busy) return;
         File curApk = downloadedApk;
         if (curApk != null && !isValidApk(curApk)) {
-            //noinspection ResultOfMethodCallIgnored
-            curApk.delete();
             downloadedApk = null;
+            deleteStaleApkAsync(curApk);
             if (b.btnDownload.getVisibility() == View.VISIBLE) {
                 b.btnDownload.setText(R.string.btn_download);
             }
@@ -269,12 +268,7 @@ public class MainActivity extends AppCompatActivity {
                     : R.string.latest_is_newer_local);
             b.tvStatus.setText(R.string.status_up_to_date);
             b.btnDownload.setVisibility(View.GONE);
-            File apkToDelete = downloadedApk;
-            if (apkToDelete != null) {
-                downloadedApk = null;
-                //noinspection ResultOfMethodCallIgnored
-                apkToDelete.delete();
-            }
+            downloadedApk = null;
             executor.execute(this::cleanupDownloadDirs);
         } else {
             b.tvLatestHint.setText(R.string.latest_is_newer);
@@ -567,7 +561,12 @@ public class MainActivity extends AppCompatActivity {
                 final long finalDownloaded = downloaded;
                 final File finalOut = out;
                 ui.post(() -> {
-                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
+                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) {
+                        deleteStaleApkAsync(finalOut);
+                        return;
+                    }
+                    // 先写 downloadedApk 再清 activeTask，与 cleanupDownloadDirs 先读 activeTask 再读 downloadedApk 形成顺序保证
+                    downloadedApk = finalOut;
                     activeTask = null;
                     updateProgress(finalDownloaded, total > 0 ? total : finalDownloaded, 0);
                     onDownloadFinished(finalOut);
@@ -604,6 +603,17 @@ public class MainActivity extends AppCompatActivity {
             } finally {
                 task.activeConnection = null;
                 if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private void deleteStaleApkAsync(@NonNull File apk) {
+        if (executor.isShutdown()) return;
+        executor.execute(() -> {
+            synchronized (fileLock) {
+                if (activeTask != null || apk.equals(downloadedApk)) return;
+                //noinspection ResultOfMethodCallIgnored
+                apk.delete();
             }
         });
     }
