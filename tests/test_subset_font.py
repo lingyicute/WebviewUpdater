@@ -113,6 +113,24 @@ class SubsetFontTests(unittest.TestCase):
         self.assertTrue(result.endswith('}p{color:red}</style>'))
         self.assertNotIn('old}font', result)
 
+    def test_comments_with_closing_parens_inside_url_do_not_truncate_rule(self):
+        source = '<style>@font-face{font-family:"Nebulove";src:url("old.woff2" /* ) } */);}p{color:red}</style>'
+        result = self.render(source)
+        self.assertTrue(result.endswith('}p{color:red}</style>'))
+        self.assertNotIn('/* ) } */', result)
+
+    def test_self_closing_script_or_style_does_not_duplicate_markup(self):
+        source = '<script src="app.js" data-note="/* 龘 */"/>\n<style/>\n<style>' + FONT + '</style><p>甲</p>'
+        result = self.render(source)
+        self.assertEqual(result.count('<script src="app.js"'), 1)
+        self.assertIn('甲', self.texts[-1])
+
+    def test_escaped_quotes_in_css_do_not_invert_comment_and_string_stripping(self):
+        source = '<style>' + FONT + '.a-\\"{color:red}/* 注释龘 */.b::before{content:"/* 正文乙 */"}</style>'
+        self.render(source)
+        self.assertNotIn('龘', self.texts[-1])
+        self.assertIn('乙', self.texts[-1])
+
     def test_style_attributes_and_case_insensitive_rules(self):
         prefix = '<STYLE data-example=">">\n'
         result = self.render(prefix + FONT.replace('@font-face', '@FONT-FACE') + '</STYLE >')

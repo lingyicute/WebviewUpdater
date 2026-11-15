@@ -13,17 +13,20 @@ INDEX_PATH = os.path.join(REPO_ROOT, "web", "index.html")
 DOWNLOAD_TIMEOUT_SEC = 60
 # 字符串 / 注释先整体识别，不能在字面量内寻找 @font-face 或右花括号。
 FONT_FACE_START_RE = re.compile(r'@font-face\s*\{', re.IGNORECASE)
-HTML_COMMENT_RE = re.compile(r'<!--.*?--\s*>', re.DOTALL)
-CSS_TOKEN_RE = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|/\*.*?\*/', re.DOTALL)
+HTML_COMMENT_RE = re.compile(r'<!--(?:.*?--\s*>|.*\Z)', re.DOTALL)
+CSS_TOKEN_RE = re.compile(
+    r'("(?:\\.|[^"\\])*(?:"|\Z)|\'(?:\\.|[^\'\\])*(?:\'|\Z)|\\(?:[0-9a-f]{1,6}[ \t\r\n\f]?|.))|/\*.*?(?:\*/|\Z)',
+    re.DOTALL | re.IGNORECASE,
+)
 CSS_OPAQUE_RE = re.compile(r"""
-    \burl\((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^"'\\)])*\)
+    \burl\((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|/\*.*?(?:\*/|\Z)|\\.|[^"'\\)])*\)
     | "(?:\\.|[^"\\])*(?:"|\Z)
     | '(?:\\.|[^'\\])*(?:'|\Z)
     | /\*.*?(?:\*/|\Z)
     | \\(?:[0-9a-f]{1,6}[ \t\r\n\f]?|.)
 """, re.DOTALL | re.IGNORECASE | re.VERBOSE)
 JS_TOKEN_RE = re.compile(
-    r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`)|/\*.*?\*/|//[^\r\n]*',
+    r'("(?:\\.|[^"\\])*(?:"|\Z)|\'(?:\\.|[^\'\\])*(?:\'|\Z)|`(?:\\.|[^`\\])*(?:`|\Z))|/\*.*?(?:\*/|\Z)|//[^\r\n]*',
     re.DOTALL,
 )
 
@@ -40,6 +43,9 @@ class HtmlSource(HTMLParser):
         self.raw_block = None
         self.feed(source)
         self.close()
+        if self.raw_block is not None and self.raw_block[1] <= len(source):
+            self.blocks.append((*self.raw_block, len(source)))
+            self.raw_block = None
 
     def source_offset(self):
         line, column = self.getpos()
@@ -49,9 +55,14 @@ class HtmlSource(HTMLParser):
         if tag in ('style', 'script'):
             self.raw_block = (tag, self.source_offset() + len(self.get_starttag_text()))
 
+    def handle_startendtag(self, tag, attrs):
+        pass
+
     def handle_endtag(self, tag):
         if self.raw_block is not None and self.raw_block[0] == tag:
-            self.blocks.append((*self.raw_block, self.source_offset()))
+            end = self.source_offset()
+            if self.raw_block[1] <= end:
+                self.blocks.append((*self.raw_block, end))
             self.raw_block = None
 
     def handle_comment(self, data):
