@@ -575,6 +575,7 @@ public class MainActivity extends AppCompatActivity {
                     if (out.exists()) //noinspection ResultOfMethodCallIgnored
                         out.delete();
                     if (!tmp.renameTo(out)) throw new IOException(getString(R.string.error_save_file));
+                    validatedApk = new ValidatedApk(out.getAbsolutePath(), out.length(), out.lastModified());
                 }
 
                 final long finalDownloaded = downloaded;
@@ -669,15 +670,49 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private static final class ValidatedApk {
+        final String path;
+        final long length;
+        final long lastModified;
+
+        ValidatedApk(@NonNull String path, long length, long lastModified) {
+            this.path = path;
+            this.length = length;
+            this.lastModified = lastModified;
+        }
+
+        boolean matches(@NonNull String p, long len, long mtime) {
+            return len == length && mtime == lastModified && path.equals(p);
+        }
+    }
+
+    @Nullable private volatile ValidatedApk validatedApk;
+
     /** 校验文件是否为可解析的 APK 归档，防止截断流或错误网关 HTML 被当作安装包 */
     private boolean isValidApk(@Nullable File apk) {
-        if (apk == null || !apk.isFile() || apk.length() <= 0) {
+        if (apk == null || !apk.isFile()) {
             return false;
         }
+        long len = apk.length();
+        if (len <= 0) {
+            return false;
+        }
+        String path = apk.getAbsolutePath();
+        long mtime = apk.lastModified();
+        ValidatedApk cached = validatedApk;
+        if (cached != null && cached.matches(path, len, mtime)) {
+            return true;
+        }
         try {
-            PackageInfo info = getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
-            return info != null && info.applicationInfo != null
+            PackageInfo info = getPackageManager().getPackageArchiveInfo(path, 0);
+            boolean ok = info != null && info.applicationInfo != null
                     && info.packageName != null && !info.packageName.isEmpty();
+            if (ok) {
+                validatedApk = new ValidatedApk(path, len, mtime);
+            } else if (cached != null && path.equals(cached.path)) {
+                validatedApk = null;
+            }
+            return ok;
         } catch (Throwable ignored) {
             return false;
         }
