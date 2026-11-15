@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_LATEST_VER = "latest_version_code";
     private static final String KEY_LATEST_URL = "latest_apk_url";
     private static final String KEY_DOWNLOADED_APK = "downloaded_apk_path";
+    private static final String KEY_PENDING_INSTALL = "pending_install_on_resume";
 
     private static final class RequestTask {
         final boolean isDownload;
@@ -147,6 +148,7 @@ public class MainActivity extends AppCompatActivity {
                 File f = new File(apkPath);
                 if (isValidApk(f)) {
                     downloadedApk = f;
+                    pendingInstallOnResume = savedInstanceState.getBoolean(KEY_PENDING_INSTALL, false);
                 } else if (f.exists()) {
                     deleteStaleApkAsync(f);
                 }
@@ -187,6 +189,7 @@ public class MainActivity extends AppCompatActivity {
         outState.putString(KEY_LATEST_URL, latestApkUrl);
         if (downloadedApk != null && downloadedApk.exists()) {
             outState.putString(KEY_DOWNLOADED_APK, downloadedApk.getAbsolutePath());
+            outState.putBoolean(KEY_PENDING_INSTALL, pendingInstallOnResume);
         }
     }
 
@@ -292,8 +295,10 @@ public class MainActivity extends AppCompatActivity {
         if (curApk != null && !isValidApk(curApk)) {
             downloadedApk = null;
             deleteStaleApkAsync(curApk);
-            if (b.btnDownload.getVisibility() == View.VISIBLE) {
+            if (needsUpdate()) {
                 b.btnDownload.setText(R.string.btn_download);
+            } else {
+                b.btnDownload.setVisibility(View.GONE);
             }
         }
         if (latestVersionCode <= 0) return;
@@ -326,6 +331,7 @@ public class MainActivity extends AppCompatActivity {
                     b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
                 }
             } else {
+                b.cardLatest.setVisibility(View.GONE);
                 b.btnDownload.setVisibility(View.GONE);
             }
         }
@@ -354,6 +360,7 @@ public class MainActivity extends AppCompatActivity {
     private void checkUpdate() {
         if (busy) return;
         dismissActiveDialog();
+        loadCurrentWebViewInfo();
         final RequestTask task = startNewTask(false);
         setBusy(true);
 
@@ -448,6 +455,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onLatestFetched(long ver, String apkUrl) {
+        loadCurrentWebViewInfo();
         latestVersionCode = ver;
         latestApkUrl = apkUrl;
 
@@ -551,7 +559,20 @@ public class MainActivity extends AppCompatActivity {
                 conn = openWithRedirects(urlStr, "application/vnd.android.package-archive, */*", task);
                 ui.removeCallbacks(watchdog);
 
-                final long total = conn.getContentLengthLong();
+                String lenHeader = conn.getHeaderField("Content-Length");
+                final long total;
+                if (lenHeader != null) {
+                    try {
+                        total = Long.parseLong(lenHeader.trim());
+                    } catch (NumberFormatException e) {
+                        throw new IOException(getString(R.string.error_download_incomplete), e);
+                    }
+                    if (total <= 0) {
+                        throw new IOException(getString(R.string.error_download_incomplete));
+                    }
+                } else {
+                    total = -1;
+                }
                 ui.post(() -> {
                     if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) return;
                     updateProgress(0, total, 0);
@@ -852,20 +873,21 @@ public class MainActivity extends AppCompatActivity {
         b.btnDownload.setText(R.string.btn_install);
         b.btnDownload.setVisibility(View.VISIBLE);
         ui.postDelayed(hideProgressRunnable, 600);
-        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+        if (latestVersionCode > 0) {
+            b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
+        } else {
             b.tvStatus.setText(R.string.status_download_done);
+        }
+        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
             installApk(apk);
         } else {
             pendingInstallOnResume = true;
-            if (latestVersionCode > 0) {
-                b.tvStatus.setText(getString(R.string.status_update_available, latestVersionCode));
-            } else {
-                b.tvStatus.setText(R.string.status_download_done);
-            }
         }
     }
 
     private void hideProgressCard() {
+        ui.removeCallbacks(hideProgressRunnable);
+        b.btnCancel.setEnabled(false);
         b.cardProgress.setVisibility(View.GONE);
         b.tvSpeed.setText("");
         b.tvProgress.setText("");
@@ -875,11 +897,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void installApk(@NonNull File apk) {
         if (isFinishing() || isDestroyed()) return;
+        loadCurrentWebViewInfo();
+        if (latestVersionCode > 0 && currentVersionCode >= 0 && currentVersionCode >= latestVersionCode) {
+            refreshUpdateStateAfterResume();
+            return;
+        }
         if (!isValidApk(apk)) {
             downloadedApk = null;
             deleteStaleApkAsync(apk);
             b.btnDownload.setText(R.string.btn_download);
-            loadCurrentWebViewInfo();
             refreshUpdateStateAfterResume();
             if (needsUpdate()) {
                 confirmDownload();
