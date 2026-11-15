@@ -2,6 +2,7 @@
 """子集化 Nebulove 字体并内嵌进 web/index.html"""
 import re, base64, urllib.request, os, sys, tempfile, html as html_lib
 from html.parser import HTMLParser
+import shutil
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT_URL = "https://raw.githubusercontent.com/lingyicute/Nebulove/main/Nebulove.ttf"
@@ -245,6 +246,8 @@ def main():
     try:
         with os.fdopen(tmp_html_fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(new_html)
+        # mkstemp 默认 0600；保留原权限，避免其他用户运行的静态服务器无法读取。
+        shutil.copymode(INDEX_PATH, tmp_html_path)
         os.replace(tmp_html_path, INDEX_PATH)
     except Exception:
         if os.path.exists(tmp_html_path):

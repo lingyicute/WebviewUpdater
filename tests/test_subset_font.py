@@ -4,6 +4,7 @@ import importlib.util
 import io
 from pathlib import Path
 import sys
+import stat
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -151,6 +152,23 @@ class SubsetFontTests(unittest.TestCase):
             self.run_main()
         replace.assert_not_called()
         self.assertEqual(self.index.read_text(encoding="utf-8"), result)
+
+    def test_atomic_replacement_preserves_file_permissions(self):
+        for mode in (0o644, 0o640):
+            with self.subTest(mode=oct(mode)):
+                self.index.write_text('<style>' + FONT + '</style>', encoding="utf-8")
+                self.index.chmod(mode)
+                self.run_main()
+                self.assertEqual(stat.S_IMODE(self.index.stat().st_mode), mode)
+
+    def test_failed_replace_keeps_original_and_removes_temporary_file(self):
+        source = '<style>' + FONT + '</style>'
+        self.index.write_text(source, encoding="utf-8")
+        with mock.patch.object(subset_font.os, 'replace', side_effect=OSError('write failed')):
+            with self.assertRaises(OSError):
+                self.run_main()
+        self.assertEqual(self.index.read_text(encoding="utf-8"), source)
+        self.assertEqual(list(self.index.parent.iterdir()), [self.index])
 
     def test_failed_font_sources_leave_original_untouched(self):
         source = '<style>' + FONT + '</style>'
