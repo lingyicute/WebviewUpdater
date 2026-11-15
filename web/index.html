@@ -325,7 +325,11 @@
       .card:hover { transform: none; }
       .m-btn.spinning svg { animation: none; }
     }
+    @media print {
+      .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    }
   </style>
+  <noscript><style>.reveal{opacity:1;transform:none;transition:none;}</style></noscript>
 </head>
 <body>
 
