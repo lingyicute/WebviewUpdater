@@ -66,11 +66,16 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DOWNLOADED_APK = "downloaded_apk_path";
 
     private static final class RequestTask {
+        final boolean isDownload;
         final AtomicBoolean cancelled = new AtomicBoolean(false);
         final AtomicBoolean connectTimedOut = new AtomicBoolean(false);
         volatile boolean connected = false;
         @Nullable volatile HttpURLConnection activeConnection;
         @Nullable Runnable watchdog;
+
+        RequestTask(boolean isDownload) {
+            this.isDownload = isDownload;
+        }
 
         void cancel() {
             if (cancelled.compareAndSet(false, true)) {
@@ -142,6 +147,8 @@ public class MainActivity extends AppCompatActivity {
                 File f = new File(apkPath);
                 if (isValidApk(f)) {
                     downloadedApk = f;
+                } else if (f.exists()) {
+                    deleteStaleApkAsync(f);
                 }
             }
         }
@@ -209,11 +216,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @NonNull
-    private RequestTask startNewTask() {
+    private RequestTask startNewTask(boolean isDownload) {
         cancelActiveTask();
-        RequestTask task = new RequestTask();
+        RequestTask task = new RequestTask(isDownload);
         activeTask = task;
         return task;
+    }
+
+    private boolean isDownloadTaskActive() {
+        RequestTask task = activeTask;
+        return task != null && task.isDownload;
     }
 
     private void cancelActiveTask() {
@@ -342,7 +354,7 @@ public class MainActivity extends AppCompatActivity {
     private void checkUpdate() {
         if (busy) return;
         dismissActiveDialog();
-        final RequestTask task = startNewTask();
+        final RequestTask task = startNewTask(false);
         setBusy(true);
 
         ui.removeCallbacks(hideProgressRunnable);
@@ -355,7 +367,11 @@ public class MainActivity extends AppCompatActivity {
         b.cardLatest.setVisibility(View.GONE);
         latestVersionCode = -1;
         latestApkUrl = null;
+        File prevApk = downloadedApk;
         downloadedApk = null;
+        if (prevApk != null) {
+            deleteStaleApkAsync(prevApk);
+        }
 
         // 10 秒连接看门狗：避免 DNS 解析、多 IP 轮询或 TLS 握手超时过长导致界面长时间卡在「正在检查更新…」
         final Runnable watchdog = () -> {
@@ -474,7 +490,7 @@ public class MainActivity extends AppCompatActivity {
         final String urlStr = latestApkUrl;
         final long targetCode = latestVersionCode;
 
-        final RequestTask task = startNewTask();
+        final RequestTask task = startNewTask(true);
         setBusy(true);
         downloadedApk = null;
         b.btnDownload.setText(R.string.btn_download);
@@ -579,7 +595,7 @@ public class MainActivity extends AppCompatActivity {
                     throw new IOException(getString(R.string.error_download_incomplete));
                 }
                 synchronized (fileLock) {
-                    if (task.cancelled.get() || activeTask != task) {
+                    if (isFinishing() || isDestroyed() || task.cancelled.get() || activeTask != task) {
                         throw new InterruptedIOException("cancelled");
                     }
                     if (out.exists()) //noinspection ResultOfMethodCallIgnored
@@ -641,7 +657,7 @@ public class MainActivity extends AppCompatActivity {
         if (executor.isShutdown()) return;
         executor.execute(() -> {
             synchronized (fileLock) {
-                if (activeTask != null || apk.equals(downloadedApk)) return;
+                if (isDownloadTaskActive() || apk.equals(downloadedApk)) return;
                 //noinspection ResultOfMethodCallIgnored
                 apk.delete();
             }
@@ -650,7 +666,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void cleanupDownloadDirs() {
         synchronized (fileLock) {
-            if (activeTask != null || downloadedApk != null) return;
+            if (isDownloadTaskActive() || downloadedApk != null) return;
             cleanupAllDownloadDirsLocked();
         }
     }
@@ -799,13 +815,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cancelDownload() {
-        if (activeTask == null) return;
+        if (!isDownloadTaskActive()) return;
         pendingInstallOnResume = false;
         cancelActiveTask();
         hideProgressCard();
         setBusy(false);
         b.tvStatus.setText(R.string.status_cancelled);
-        b.btnDownload.setVisibility(View.VISIBLE);
+        if (latestApkUrl != null) {
+            b.btnDownload.setVisibility(View.VISIBLE);
+        }
     }
 
     private void updateProgress(long downloaded, long total, double bytesPerSec) {
