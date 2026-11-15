@@ -139,3 +139,35 @@ test('preview check completes and enables a subsequent check', () => {
   view.ids['m-check'].click();
   assert.equal(view.timers.length, 2);
 });
+
+test('automatic mode follows system scheme changes', () => {
+  const view = page();
+  view.changeScheme(true);
+  assert.ok(view.ids.phone.classList.contains('dark'));
+  view.changeScheme(false);
+  assert.ok(!view.ids.phone.classList.contains('dark'));
+});
+
+test('persisted theme overrides system preference', () => {
+  const view = page({ saved: 'dark' });
+  view.changeScheme(false);
+  assert.ok(view.ids.phone.classList.contains('dark'));
+});
+
+test('invalid saved preference still follows the system', () => {
+  const view = page({ saved: 'invalid' });
+  view.changeScheme(true);
+  assert.ok(view.ids.phone.classList.contains('dark'));
+});
+
+test('manual theme survives scheme changes when storage is blocked', () => {
+  const view = page({ storageBlocked: true, dark: true });
+  view.buttons[0].click();
+  view.changeScheme(true);
+  assert.ok(!view.ids.phone.classList.contains('dark'));
+  assert.equal(view.buttons[0].getAttribute('aria-pressed'), 'true');
+  assert.equal(view.buttons[1].getAttribute('aria-pressed'), 'false');
+  view.buttons[1].click();
+  view.changeScheme(false);
+  assert.ok(view.ids.phone.classList.contains('dark'));
+});

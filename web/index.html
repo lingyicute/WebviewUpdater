@@ -588,6 +588,7 @@
           segButtons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
         }
         if (persist) {
+          saved = mode; // 即使存储不可用，也保留本次会话中的手动选择
           try { localStorage.setItem('wvu-preview-mode', mode); } catch (e) {}
         }
       }
@@ -607,6 +608,7 @@
         setMode('light', false);
       }
       function onSchemeChange(e) {
+        if (saved === 'dark' || saved === 'light') return;
         var currentSaved = null;
         try { currentSaved = localStorage.getItem('wvu-preview-mode'); } catch (err) {}
         if (currentSaved !== 'dark' && currentSaved !== 'light') {
